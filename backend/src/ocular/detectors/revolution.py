@@ -1,14 +1,19 @@
 """Revolution counter — ROI line-crossing on a high-contrast marker.
 
-Watches one small region the marker passes through each turn (a black tape strip
-on a cat-wheel rim). Each frame: take the mean brightness inside the ROI; the
-marker is "present" when that mean crosses the threshold. A revolution is counted
-on each present→absent edge, with hysteresis (the state must hold for
-debounce_frames consecutive frames before it flips) so a marker that dwells
-across several frames at low RPM counts exactly once.
+Watches one region the marker passes through each turn (a black tape strip on a
+cat-wheel rim). Each frame: count the fraction of ROI pixels matching the marker
+(darker than threshold by default); the marker is "present" when that coverage
+crosses min_coverage. A revolution is counted on each present→absent edge, with
+hysteresis (the state must hold for debounce_frames consecutive frames before it
+flips) so a marker that dwells across several frames counts exactly once.
 
-Pure numpy — a cropped mean + a small state machine. Trivially real-time on a
-Pi 3 B+ at 320-640px wide.
+Coverage rather than mean brightness is what lets the ROI be a tall, thin strip
+along the marker's track: the marker dwells in it for many frames (so a fast
+wheel isn't aliased away between samples) without the surrounding rim diluting a
+whole-ROI average below the trigger.
+
+Pure numpy — a cropped boolean count + a small state machine. Trivially
+real-time on a Pi 3 B+ at 320-640px wide.
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ class RevolutionDetector(Detector):
         self._count = 0
         self._last_cross = 0.0
         self._rpm = 0.0
-        self._last_mean = 0.0
+        self._last_coverage = 0.0
         self._active = False  # marker currently in the ROI (debounced)
 
     def configure(self, cfg: RevolutionConfig) -> None:
@@ -50,13 +55,16 @@ class RevolutionDetector(Detector):
         x1, y1 = min(w_img, x + w), min(h_img, y + h)
         if x1 <= x0 or y1 <= y0:
             return
-        mean = float(gray[y0:y1, x0:x1].mean())
-        self._last_mean = mean
+        roi = gray[y0:y1, x0:x1]
+        # Fraction of ROI pixels matching the marker (dark by default, light if
+        # marker_is_dark is false). A per-pixel test, not a whole-ROI mean, so a
+        # small tape band crossing a tall ROI still registers — the metric scales
+        # with marker coverage, not with how much empty rim shares the box.
+        hit = roi < self._cfg.threshold if self._cfg.marker_is_dark else roi > self._cfg.threshold
+        coverage = float(hit.mean())
+        self._last_coverage = coverage
 
-        # "marker present" = ROI is dark (default) or light, per marker_is_dark.
-        instant = mean < self._cfg.threshold
-        if not self._cfg.marker_is_dark:
-            instant = mean > self._cfg.threshold
+        instant = coverage >= self._cfg.min_coverage
 
         # Debounce: only flip the committed state after N consistent frames.
         if instant != self._candidate:
@@ -89,8 +97,8 @@ class RevolutionDetector(Detector):
             "rpm": round(self._rpm, 1),
             "distance_m": round(self._count * circ, 1) if circ else None,
             "marker_present": self._active,
-            "roi_mean": round(self._last_mean, 1),
-            "threshold": self._cfg.threshold,
+            "coverage": round(self._last_coverage, 3),
+            "min_coverage": self._cfg.min_coverage,
         }
 
     def overlay(self) -> dict | None:

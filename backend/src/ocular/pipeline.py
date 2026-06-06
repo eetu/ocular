@@ -109,7 +109,7 @@ class Pipeline:
         """Apply UI-driven changes to the revolution detector and persist them."""
         with self._lock:
             cfg = self.config.detectors.revolution
-            for key in ("enabled", "roi", "threshold", "debounce_frames",
+            for key in ("enabled", "roi", "threshold", "min_coverage", "debounce_frames",
                         "wheel_circumference_m", "marker_is_dark"):
                 if key in changes and changes[key] is not None:
                     setattr(cfg, key, changes[key])

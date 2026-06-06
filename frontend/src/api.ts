@@ -6,8 +6,8 @@ export type RevolutionState = {
   rpm: number;
   distance_m: number | null;
   marker_present: boolean;
-  roi_mean: number;
-  threshold: number;
+  coverage: number;
+  min_coverage: number;
 };
 
 export type StateResponse = {
@@ -19,6 +19,7 @@ export type RevolutionConfig = {
   enabled: boolean;
   roi: [number, number, number, number];
   threshold: number;
+  min_coverage: number;
   debounce_frames: number;
   wheel_circumference_m: number;
   marker_is_dark: boolean;

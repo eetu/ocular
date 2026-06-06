@@ -83,7 +83,7 @@
     <Controls
       config={config.detectors.revolution}
       bind:mask
-      roiMean={rev?.roi_mean ?? 0}
+      coverage={rev?.coverage ?? 0}
       rotation={config.camera.rotation}
       onchange={applyRevolution}
       onrotate={applyRotation}

@@ -6,14 +6,14 @@
   let {
     config,
     mask = $bindable(),
-    roiMean,
+    coverage,
     rotation,
     onchange,
     onrotate,
   }: {
     config: RevolutionConfig;
     mask: boolean;
-    roiMean: number;
+    coverage: number;
     rotation: number;
     onchange: (changes: Partial<RevolutionConfig>) => void;
     onrotate: (rotation: number) => void;
@@ -38,7 +38,24 @@
       oninput={(e) => onchange({ threshold: +e.currentTarget.value })}
     />
   </label>
-  <div class="hint mono-num">roi mean: {roiMean}</div>
+  <label class="row">
+    <span
+      >coverage trigger
+      <em class="mono-num">{Math.round(config.min_coverage * 100)}%</em></span
+    >
+    <input
+      type="range"
+      min="1"
+      max="100"
+      value={Math.round(config.min_coverage * 100)}
+      oninput={(e) => onchange({ min_coverage: +e.currentTarget.value / 100 })}
+    />
+  </label>
+  <div class="hint mono-num">
+    coverage now: {Math.round(coverage * 100)}% (fires ≥ {Math.round(
+      config.min_coverage * 100,
+    )}%)
+  </div>
 
   <label class="toggle">
     <input type="checkbox" bind:checked={mask} />

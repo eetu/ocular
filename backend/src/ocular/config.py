@@ -42,11 +42,19 @@ class RevolutionConfig:
 
     enabled: bool = True
     # Region of interest the marker passes through, in *processing* pixels
-    # (i.e. after capture downscale): [x, y, w, h].
-    roi: list[int] = field(default_factory=lambda: [280, 200, 80, 80])
-    # 0-255. The ROI mean below this (marker present) vs above (rim) toggles the
-    # crossing. Black tape on a light rim → a low threshold like 60 works.
+    # (i.e. after capture downscale): [x, y, w, h]. Make it a tall, thin strip
+    # laid ALONG the marker's travel track: the marker then dwells inside it for
+    # many frames (a wide time window, so a fast wheel isn't aliased away between
+    # samples), while the coverage metric (below) keeps it from being diluted.
+    roi: list[int] = field(default_factory=lambda: [280, 160, 60, 220])
+    # 0-255 per-pixel brightness cutoff. A pixel counts as "marker" when it's
+    # darker than this (or lighter, if marker_is_dark is false). Black tape on a
+    # light rim → a low threshold like 60 works.
     threshold: int = 60
+    # Fraction (0-1) of ROI pixels that must match the marker for it to count as
+    # present. Decouples detection from ROI size: a short tape band crossing a
+    # tall ROI still spikes coverage, where a whole-ROI *mean* would barely move.
+    min_coverage: float = 0.12
     # Marker must be continuously present/absent this many frames before a state
     # flip counts — debounces a slow marker dwelling across several frames.
     debounce_frames: int = 3
