@@ -12,9 +12,10 @@
 FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend-build
 WORKDIR /app
 COPY frontend/package.json frontend/yarn.lock frontend/.yarnrc.yml ./
-RUN corepack enable && yarn install --immutable --network-timeout 1000000
+COPY frontend/.yarn/releases ./.yarn/releases
+RUN node .yarn/releases/yarn-*.cjs install --immutable --network-timeout 1000000
 COPY frontend/ .
-RUN yarn build
+RUN node .yarn/releases/yarn-*.cjs build
 
 # --- Stage 2: runtime (Python + uv) ---
 FROM python:3.14-slim AS runner

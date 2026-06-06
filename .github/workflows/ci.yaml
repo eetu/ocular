@@ -15,12 +15,11 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
-      - run: corepack enable
-      - run: yarn install --immutable
-      - run: yarn typecheck
-      - run: yarn format
-      - run: yarn build
+          node-version-file: frontend/.node-version
+      - run: node .yarn/releases/yarn-*.cjs install --immutable
+      - run: node .yarn/releases/yarn-*.cjs typecheck
+      - run: node .yarn/releases/yarn-*.cjs format
+      - run: node .yarn/releases/yarn-*.cjs build
 
   backend:
     runs-on: ubuntu-latest
