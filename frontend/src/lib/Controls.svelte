@@ -162,7 +162,7 @@
     gap: 0.4rem;
     font-family: var(--halo-font-heading);
     font-size: 0.85rem;
-    color: var(--halo-text-muted);
+    color: var(--halo-text-main);
     text-transform: lowercase;
   }
   .row em {
@@ -180,7 +180,7 @@
     gap: 0.6rem;
     font-family: var(--halo-font-heading);
     font-size: 0.85rem;
-    color: var(--halo-text-muted);
+    color: var(--halo-text-main);
     text-transform: lowercase;
     min-height: 44px;
   }
@@ -192,7 +192,7 @@
   .hint {
     font-size: 0.75rem;
     line-height: 1.35;
-    color: var(--halo-text-light);
+    color: var(--halo-text-muted);
     margin-top: -0.6rem;
   }
   .help {
@@ -211,7 +211,7 @@
   .help p {
     margin: 0.2rem 0 0;
     line-height: 1.5;
-    color: var(--halo-text-light);
+    color: var(--halo-text-muted);
     text-transform: none;
   }
   .help em {
@@ -243,7 +243,7 @@
     justify-content: space-between;
     font-family: var(--halo-font-heading);
     font-size: 0.85rem;
-    color: var(--halo-text-muted);
+    color: var(--halo-text-main);
     text-transform: lowercase;
   }
   .rotate em {
