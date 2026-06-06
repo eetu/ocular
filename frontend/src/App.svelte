@@ -74,6 +74,11 @@
   {#if live}<span class="badge viewers" title="connected stream viewers"
       >👁 {live.viewers}</span
     >{/if}
+  {#if live}<span
+      class="badge viewers"
+      title="live capture rate (drops when the wheel is still)"
+      >⚡ {live.capture_fps}fps</span
+    >{/if}
 </header>
 
 <!-- Fixed toast: overlays, never reflows the content beneath it. -->

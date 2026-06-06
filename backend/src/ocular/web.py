@@ -125,7 +125,7 @@ class StreamHub:
                 with self._lock:
                     self._jpeg = jpeg
                     self._seq += 1
-            cap = min(max(1, self._pipeline.config.camera.fps), _STREAM_FPS_CAP)
+            cap = min(self._pipeline.effective_fps, _STREAM_FPS_CAP)
             time.sleep(1.0 / cap)
 
 
@@ -149,6 +149,7 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
         return {
             "synthetic": pipeline.is_synthetic,
             "viewers": hub.viewers,
+            "capture_fps": pipeline.effective_fps,
             "detectors": pipeline.states(),
         }
 
@@ -184,7 +185,7 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
             last = -1
             try:
                 while not await request.is_disconnected():
-                    cap = min(max(1, pipeline.config.camera.fps), _STREAM_FPS_CAP)
+                    cap = min(pipeline.effective_fps, _STREAM_FPS_CAP)
                     if mask:
                         # Mask is a per-client tuning view (rare) — encode off the
                         # event loop so it can't block other requests.

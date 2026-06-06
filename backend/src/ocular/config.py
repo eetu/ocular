@@ -26,6 +26,11 @@ class CameraConfig:
     width: int = 640
     height: int = 480
     fps: int = 15
+    # Capture rate when the scene is still — the pipeline drops to this after a
+    # few quiet seconds and ramps back to `fps` on motion, so an idle wheel (the
+    # common case — the cat sleeps most of the day) doesn't cook the Pi. 0 = no
+    # idling (always `fps`).
+    idle_fps: int = 4
     # 0 / 90 / 180 / 270. Default 0: a correctly-mounted case needs no rotation.
     # Set 180 for an upside-down hang. Applied to the captured frame so the feed
     # AND detector ROI coordinates read upright.

@@ -13,6 +13,7 @@ export type RevolutionState = {
 export type StateResponse = {
   synthetic: boolean;
   viewers: number;
+  capture_fps: number;
   detectors: { revolution?: RevolutionState };
 };
 

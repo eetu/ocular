@@ -1,9 +1,13 @@
 """The pipeline ties capture → detectors → state together.
 
-A background thread reads the latest frame, converts to grayscale once, and
-feeds it to every enabled detector each tick. Detector results are read by the
-web layer (/api/state) and drawn onto the MJPEG overlay. The revolution count is
-persisted periodically so a restart doesn't lose the running total.
+A background thread reads the latest frame and feeds it to every enabled
+detector each tick (detectors grayscale only their own ROI). Detector results
+are read by the web layer (/api/state) and drawn onto the MJPEG overlay. The
+revolution count is persisted periodically so a restart doesn't lose the total.
+
+Adaptive idle: the loop watches a cheap whole-scene motion signal and drops the
+capture rate to camera.idle_fps after a few still seconds, ramping back to
+camera.fps the instant something moves — so a parked wheel barely loads the Pi.
 """
 
 from __future__ import annotations
@@ -19,6 +23,12 @@ from .config import Config, Settings, save_config
 from .detectors import Detector
 from .detectors.revolution import RevolutionDetector
 
+# Whole-scene motion gate for adaptive idling. Subsample the frame coarsely and
+# compare frame-to-frame; mean abs luminance delta over _MOTION_EPS = "moving".
+_MOTION_STEP = 16  # px stride → ~30x40 samples on a 480x640 frame, near-free
+_MOTION_EPS = 2.0  # 0-255; below this the scene is treated as still
+_IDLE_AFTER_S = 4.0  # stay at full fps this long after the last motion
+
 
 class Pipeline:
     def __init__(self, config: Config, settings: Settings) -> None:
@@ -30,6 +40,10 @@ class Pipeline:
         self._running = False
         self._thread: threading.Thread | None = None
         self._state_file = settings.state_dir / "state.json"
+        # adaptive idle state
+        self._effective_fps = max(1, config.camera.fps)
+        self._last_motion = 0.0
+        self._prev_small: np.ndarray | None = None
 
         rev = RevolutionDetector()
         rev.configure(config.detectors.revolution)
@@ -58,15 +72,38 @@ class Pipeline:
             if frame is None:
                 time.sleep(0.05)
                 continue
+            now = time.monotonic()
             with self._lock:
                 for det in self.detectors.values():
                     det.process(frame)
-            now = time.monotonic()
+            self._adapt_fps(frame, now)
             if now - last_save > 10.0:
                 self._save_state()
                 last_save = now
-            # Read fps each tick so a live change takes effect immediately.
-            time.sleep(1.0 / max(1, self.config.camera.fps))
+            time.sleep(1.0 / self._effective_fps)
+
+    def _adapt_fps(self, frame: np.ndarray, now: float) -> None:
+        """Ramp capture fps to camera.fps on scene motion, drop to idle_fps when
+        still. Cheap: a coarse subsample + frame-to-frame luminance delta."""
+        active_fps = max(1, self.config.camera.fps)
+        idle_fps = self.config.camera.idle_fps
+        # idle_fps <= 0 (or >= active) disables idling — just hold the active rate.
+        if idle_fps <= 0 or idle_fps >= active_fps:
+            target = active_fps
+        else:
+            small = frame[::_MOTION_STEP, ::_MOTION_STEP].mean(axis=2)
+            if self._prev_small is not None and small.shape == self._prev_small.shape:
+                if float(np.abs(small - self._prev_small).mean()) > _MOTION_EPS:
+                    self._last_motion = now
+            self._prev_small = small
+            target = active_fps if (now - self._last_motion) < _IDLE_AFTER_S else idle_fps
+        if target != self._effective_fps:
+            self._effective_fps = target
+            self.capture.set_fps(target)
+
+    @property
+    def effective_fps(self) -> int:
+        return self._effective_fps
 
     # --- reads ---
 
@@ -98,9 +135,15 @@ class Pipeline:
                 self.capture.set_rotation(cam.rotation)
             if changes.get("fps") is not None:
                 cam.fps = max(1, int(changes["fps"]))
+                # Treat a manual change as activity so the new rate is felt now,
+                # not after the next motion event.
+                self._last_motion = time.monotonic()
+                self._effective_fps = cam.fps
                 self.capture.set_fps(cam.fps)
+            if changes.get("idle_fps") is not None:
+                cam.idle_fps = max(0, int(changes["idle_fps"]))
             save_config(self.settings.config_path, self.config)
-            return {"rotation": cam.rotation, "fps": cam.fps}
+            return {"rotation": cam.rotation, "fps": cam.fps, "idle_fps": cam.idle_fps}
 
     def reconfigure_revolution(self, changes: dict) -> dict:
         """Apply UI-driven changes to the revolution detector and persist them."""

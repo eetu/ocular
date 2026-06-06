@@ -84,6 +84,7 @@ class SyntheticSource(CameraSource):
 
     def __init__(self, cfg: CameraConfig) -> None:
         self._cfg = cfg
+        self._fps = max(1, cfg.fps)
         self._start = 0.0
 
     def start(self) -> None:
@@ -98,8 +99,11 @@ class SyntheticSource(CameraSource):
         # Wide enough to fully darken a typical ROI as it sweeps through, so the
         # revolution counter actually triggers in dev without a camera.
         frame[:, max(0, bar_x - 60) : bar_x + 60] = 20
-        time.sleep(1.0 / max(1, self._cfg.fps))
+        time.sleep(1.0 / self._fps)
         return frame
+
+    def set_fps(self, fps: int) -> None:
+        self._fps = max(1, fps)
 
     def stop(self) -> None:
         pass
@@ -128,6 +132,7 @@ class Capture:
         self._cfg = cfg
         self._source = build_source(cfg)
         self._rotation = cfg.rotation  # mutable: tunable live from the UI
+        self._fps = max(1, cfg.fps)  # effective rate; driven by adaptive idling
         self._latest: np.ndarray | None = None
         self._lock = threading.Lock()
         self._running = False
@@ -137,11 +142,11 @@ class Capture:
         self._rotation = rotation % 360
 
     def set_fps(self, fps: int) -> None:
-        # _cfg is the shared CameraConfig, so the synthetic source's pacing and
-        # the pipeline/stream loop intervals pick this up; the real camera needs
-        # an explicit control change.
-        self._cfg.fps = fps
-        self._source.set_fps(fps)
+        # Effective capture rate — driven by the pipeline's adaptive idle logic,
+        # so it deliberately does NOT touch the configured CameraConfig.fps (the
+        # active-rate ceiling the user picked). Just retunes the live source.
+        self._fps = max(1, int(fps))
+        self._source.set_fps(self._fps)
 
     @property
     def is_synthetic(self) -> bool:
