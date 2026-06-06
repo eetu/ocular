@@ -17,7 +17,7 @@ COPY frontend/ .
 RUN yarn build
 
 # --- Stage 2: runtime (Python + uv) ---
-FROM python:3.13-slim AS runner
+FROM python:3.14-slim AS runner
 WORKDIR /app
 LABEL org.opencontainers.image.description="ocular — camera-vision app with a pluggable detector pipeline"
 LABEL org.opencontainers.image.source="https://github.com/eetu/ocular"
