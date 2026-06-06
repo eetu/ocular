@@ -17,14 +17,17 @@ supported tuning path, so a missing header just yields an anonymous identity.
 
 from __future__ import annotations
 
+import asyncio
 import io
+import threading
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 
 import numpy as np
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image, ImageDraw
+from starlette.concurrency import run_in_threadpool
 
 from .config import Settings
 from .pipeline import Pipeline
@@ -65,8 +68,70 @@ def _render(frame: np.ndarray, overlays: list[dict], *, mask: bool, threshold: i
     return _encode_jpeg(img)
 
 
+class StreamHub:
+    """One shared MJPEG encoder for all viewers.
+
+    The old code ran a separate encode loop per connection, so cost scaled with
+    viewer count — and an infinite generator with no disconnect check leaked an
+    encoder on every page reload (the old stream kept running behind the proxy).
+    This hub encodes each frame *once* and fans the bytes out to every viewer;
+    the encoder thread only runs while at least one viewer is connected and stops
+    when the count hits zero, so an idle app (no tab open) does no encoding at
+    all. Viewers are reference-counted; the count is exposed at /api/state."""
+
+    def __init__(self, pipeline: Pipeline) -> None:
+        self._pipeline = pipeline
+        self._lock = threading.Lock()
+        self._viewers = 0
+        self._jpeg: bytes | None = None
+        self._seq = 0
+        self._thread: threading.Thread | None = None
+
+    @property
+    def viewers(self) -> int:
+        with self._lock:
+            return self._viewers
+
+    def acquire(self) -> None:
+        with self._lock:
+            self._viewers += 1
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(
+                    target=self._encode_loop, name="ocular-stream", daemon=True
+                )
+                self._thread.start()
+
+    def release(self) -> None:
+        with self._lock:
+            self._viewers = max(0, self._viewers - 1)
+
+    def latest(self, since_seq: int) -> tuple[bytes, int] | None:
+        """Return (jpeg, seq) if a frame newer than since_seq exists, else None."""
+        with self._lock:
+            if self._jpeg is not None and self._seq != since_seq:
+                return self._jpeg, self._seq
+            return None
+
+    def _encode_loop(self) -> None:
+        while True:
+            with self._lock:
+                if self._viewers == 0:
+                    self._jpeg = None  # drop the last frame; encoder exits
+                    return
+            frame = self._pipeline.latest_frame()
+            if frame is not None:
+                threshold = self._pipeline.config.detectors.revolution.threshold
+                jpeg = _render(frame, self._pipeline.overlays(), mask=False, threshold=threshold)
+                with self._lock:
+                    self._jpeg = jpeg
+                    self._seq += 1
+            cap = min(max(1, self._pipeline.config.camera.fps), _STREAM_FPS_CAP)
+            time.sleep(1.0 / cap)
+
+
 def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
     app = FastAPI(title="ocular", docs_url=None, redoc_url=None, openapi_url=None)
+    hub = StreamHub(pipeline)
 
     @app.get("/status")
     def status() -> dict:
@@ -81,7 +146,11 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
 
     @app.get("/api/state")
     def state() -> dict:
-        return {"synthetic": pipeline.is_synthetic, "detectors": pipeline.states()}
+        return {
+            "synthetic": pipeline.is_synthetic,
+            "viewers": hub.viewers,
+            "detectors": pipeline.states(),
+        }
 
     @app.get("/api/config")
     def get_config() -> dict:
@@ -97,23 +166,47 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
         changes = await request.json()
         return JSONResponse(pipeline.reconfigure_camera(changes))
 
+    def _part(jpeg: bytes) -> bytes:
+        return (
+            f"--{_BOUNDARY}\r\nContent-Type: image/jpeg\r\n"
+            f"Content-Length: {len(jpeg)}\r\n\r\n"
+        ).encode() + jpeg + b"\r\n"
+
     @app.get("/stream.mjpg")
-    def stream(mask: int = 0) -> StreamingResponse:
-        def frames() -> Iterator[bytes]:
-            while True:
-                frame = pipeline.latest_frame()
-                if frame is None:
-                    time.sleep(0.1)
-                    continue
-                threshold = pipeline.config.detectors.revolution.threshold
-                jpeg = _render(frame, pipeline.overlays(), mask=bool(mask), threshold=threshold)
-                yield (
-                    f"--{_BOUNDARY}\r\nContent-Type: image/jpeg\r\n"
-                    f"Content-Length: {len(jpeg)}\r\n\r\n"
-                ).encode() + jpeg + b"\r\n"
-                # Cap the preview rate (see _STREAM_FPS_CAP), independent of the
-                # detector's full-fps sampling.
-                time.sleep(1.0 / min(max(1, pipeline.config.camera.fps), _STREAM_FPS_CAP))
+    async def stream(request: Request, mask: int = 0) -> StreamingResponse:
+        # Reference-count this viewer so the hub knows when to encode / idle, and
+        # release it when the client goes away (browser close, reload, nav). The
+        # async is_disconnected() check is what actually reaps a closed stream —
+        # the old infinite generator never noticed, so reloads leaked encoders.
+        hub.acquire()
+
+        async def frames() -> AsyncIterator[bytes]:
+            last = -1
+            try:
+                while not await request.is_disconnected():
+                    cap = min(max(1, pipeline.config.camera.fps), _STREAM_FPS_CAP)
+                    if mask:
+                        # Mask is a per-client tuning view (rare) — encode off the
+                        # event loop so it can't block other requests.
+                        frame = pipeline.latest_frame()
+                        if frame is None:
+                            await asyncio.sleep(0.05)
+                            continue
+                        threshold = pipeline.config.detectors.revolution.threshold
+                        jpeg = await run_in_threadpool(
+                            _render, frame, pipeline.overlays(), mask=True, threshold=threshold
+                        )
+                        yield _part(jpeg)
+                        await asyncio.sleep(1.0 / cap)
+                    else:
+                        got = hub.latest(last)  # shared bytes — no per-client encode
+                        if got is None:
+                            await asyncio.sleep(0.5 / cap)
+                            continue
+                        jpeg, last = got
+                        yield _part(jpeg)
+            finally:
+                hub.release()
 
         return StreamingResponse(
             frames(),

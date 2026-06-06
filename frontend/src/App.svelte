@@ -71,6 +71,9 @@
 <header>
   <Wordmark />
   {#if live?.synthetic}<span class="badge">synthetic</span>{/if}
+  {#if live}<span class="badge viewers" title="connected stream viewers"
+      >👁 {live.viewers}</span
+    >{/if}
 </header>
 
 <!-- Fixed toast: overlays, never reflows the content beneath it. -->
@@ -118,6 +121,10 @@
     border: 1px solid var(--halo-accent);
     border-radius: var(--halo-radius-pill);
     padding: 0.1rem 0.4rem;
+  }
+  .badge.viewers {
+    color: var(--halo-text-muted);
+    border-color: var(--halo-border);
   }
   main {
     max-width: 560px;
