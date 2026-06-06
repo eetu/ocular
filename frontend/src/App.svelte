@@ -14,6 +14,20 @@
   let live = $state<StateResponse | null>(null);
   let mask = $state(false);
   let error = $state<string | null>(null);
+  // Preview is opt-in: the live MJPEG stream is the expensive part, and most of
+  // the time you only want the count (cheap /api/state poll). Off → no stream
+  // connection → the backend encoder stays idle.
+  let showPreview = $state(false);
+  // Auto-stop: once shown, the preview turns itself back off after the scene has
+  // been still a while (capture_fps drops below the configured rate when there's
+  // no motion), so a forgotten-open tab doesn't keep streaming.
+  const AUTO_STOP_MS = 60_000;
+  let lastActiveMs = 0;
+
+  function togglePreview() {
+    showPreview = !showPreview;
+    if (showPreview) lastActiveMs = Date.now();
+  }
 
   const rev = $derived(live?.detectors.revolution ?? null);
 
@@ -41,6 +55,12 @@
         .then((s) => {
           live = s;
           error = null;
+          // Scene is "active" when capture hasn't idled below the configured fps.
+          if (showPreview && config) {
+            if (s.capture_fps >= config.camera.fps) lastActiveMs = Date.now();
+            else if (Date.now() - lastActiveMs > AUTO_STOP_MS)
+              showPreview = false;
+          }
         })
         .catch((e) => (error = String(e)));
     }, 1000);
@@ -72,12 +92,12 @@
   <Wordmark />
   {#if live?.synthetic}<span class="badge">synthetic</span>{/if}
   {#if live}<span class="badge viewers" title="connected stream viewers"
-      >👁 {live.viewers}</span
+      >{live.viewers} watching</span
     >{/if}
   {#if live}<span
       class="badge viewers"
       title="live capture rate (drops when the wheel is still)"
-      >⚡ {live.capture_fps}fps</span
+      >{live.capture_fps} fps</span
     >{/if}
 </header>
 
@@ -86,13 +106,29 @@
 
 <main>
   {#if config}
-    <LiveView
-      roi={config.detectors.revolution.roi}
-      {procWidth}
-      {procHeight}
-      {mask}
-      onchange={(roi) => applyRevolution({ roi })}
-    />
+    <div class="preview-bar">
+      <span>live preview</span>
+      <button type="button" class="preview-toggle" onclick={togglePreview}>
+        {showPreview ? "stop" : "show"}
+      </button>
+    </div>
+    {#if showPreview}
+      <LiveView
+        roi={config.detectors.revolution.roi}
+        {procWidth}
+        {procHeight}
+        {mask}
+        onchange={(roi) => applyRevolution({ roi })}
+      />
+    {:else}
+      <button
+        type="button"
+        class="preview-off halo-card"
+        onclick={togglePreview}
+      >
+        preview off — counting continues. tap to show.
+      </button>
+    {/if}
     <Counter state={rev} />
     <Controls
       config={config.detectors.revolution}
@@ -156,5 +192,46 @@
     color: var(--halo-text-muted);
     padding: 3rem 0;
     font-family: var(--halo-font-heading);
+  }
+  .preview-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--halo-font-heading);
+    font-size: 0.85rem;
+    color: var(--halo-text-main);
+    text-transform: lowercase;
+    margin-bottom: -0.4rem;
+  }
+  .preview-toggle {
+    font-family: var(--halo-font-heading);
+    text-transform: lowercase;
+    font-size: 0.8rem;
+    color: var(--halo-text-main);
+    background: var(--halo-bg-light);
+    border: 1px solid var(--halo-border);
+    border-radius: var(--halo-radius-pill);
+    padding: 0.5rem 1.1rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .preview-toggle:active {
+    border-color: var(--halo-accent);
+    color: var(--halo-accent);
+  }
+  .preview-off {
+    width: 100%;
+    text-align: center;
+    padding: 1.6rem 1rem;
+    font-family: var(--halo-font-heading);
+    font-size: 0.85rem;
+    text-transform: lowercase;
+    color: var(--halo-text-muted);
+    border: 1px dashed var(--halo-border);
+    cursor: pointer;
+  }
+  .preview-off:active {
+    border-color: var(--halo-accent);
+    color: var(--halo-accent);
   }
 </style>

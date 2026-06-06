@@ -44,9 +44,12 @@ _STREAM_FPS_CAP = 12
 # regardless (it's positioned in display px, not stream px).
 _STREAM_SCALE = 2
 _STREAM_QUALITY = 55
-# Stop encoding entirely once the scene has been still this long, even with a tab
-# left open — the viewer just holds the last frame; encoding resumes on motion.
-_STREAM_IDLE_STOP_S = 15.0
+# Once the scene has been still this long, throttle the preview to a slow
+# keepalive (even with a tab left open) — almost no CPU, but enough to keep the
+# MJPEG connection alive through the reverse proxy and feed a fresh frame to a
+# newly-opened tab. Full motion resumes the instant something moves.
+_STREAM_IDLE_AFTER_S = 15.0
+_STREAM_IDLE_FPS = 2
 # accent #f78f08 (active) / muted grey (idle) — matches halo-design tokens.
 _ACTIVE_RGB = (247, 143, 8)
 _IDLE_RGB = (160, 160, 160)
@@ -130,11 +133,7 @@ class StreamHub:
                 if self._viewers == 0:
                     self._jpeg = None  # drop the last frame; encoder exits
                     return
-            if self._pipeline.seconds_since_motion() > _STREAM_IDLE_STOP_S:
-                # Scene parked — stop encoding (viewers hold the last frame),
-                # just poll cheaply for motion to resume.
-                time.sleep(0.5)
-                continue
+            idle = self._pipeline.seconds_since_motion() > _STREAM_IDLE_AFTER_S
             frame = self._pipeline.latest_frame()
             if frame is not None:
                 threshold = self._pipeline.config.detectors.revolution.threshold
@@ -142,8 +141,9 @@ class StreamHub:
                 with self._lock:
                     self._jpeg = jpeg
                     self._seq += 1
-            cap = min(self._pipeline.effective_fps, _STREAM_FPS_CAP)
-            time.sleep(1.0 / cap)
+            # Parked scene → slow keepalive; otherwise the capped live rate.
+            rate = _STREAM_IDLE_FPS if idle else min(self._pipeline.effective_fps, _STREAM_FPS_CAP)
+            time.sleep(1.0 / rate)
 
 
 def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
