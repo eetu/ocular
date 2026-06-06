@@ -7,16 +7,27 @@
     config,
     mask = $bindable(),
     roiMean,
+    rotation,
     onchange,
+    onrotate,
   }: {
     config: RevolutionConfig;
     mask: boolean;
     roiMean: number;
+    rotation: number;
     onchange: (changes: Partial<RevolutionConfig>) => void;
+    onrotate: (rotation: number) => void;
   } = $props();
 </script>
 
 <div class="controls halo-card">
+  <div class="rotate">
+    <span>orientation <em class="mono-num">{rotation}°</em></span>
+    <button type="button" onclick={() => onrotate((rotation + 90) % 360)}
+      >rotate 90°</button
+    >
+  </div>
+
   <label class="row">
     <span>threshold <em class="mono-num">{config.threshold}</em></span>
     <input
@@ -107,5 +118,34 @@
     font-size: 0.75rem;
     color: var(--halo-text-light);
     margin-top: -0.4rem;
+  }
+  .rotate {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--halo-font-heading);
+    font-size: 0.85rem;
+    color: var(--halo-text-muted);
+    text-transform: lowercase;
+  }
+  .rotate em {
+    color: var(--halo-accent);
+    font-style: normal;
+  }
+  .rotate button {
+    font-family: var(--halo-font-heading);
+    text-transform: lowercase;
+    font-size: 0.8rem;
+    color: var(--halo-text-main);
+    background: var(--halo-bg-light);
+    border: 1px solid var(--halo-border);
+    border-radius: var(--halo-radius-pill);
+    padding: 0.5rem 0.8rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .rotate button:active {
+    border-color: var(--halo-accent);
+    color: var(--halo-accent);
   }
 </style>

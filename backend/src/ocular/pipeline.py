@@ -94,6 +94,17 @@ class Pipeline:
 
     # --- live reconfigure ---
 
+    def reconfigure_camera(self, changes: dict) -> dict:
+        """Apply UI-driven camera changes (rotation is the live-tunable one) and
+        persist them. Rotation takes effect on the next captured frame."""
+        with self._lock:
+            cam = self.config.camera
+            if changes.get("rotation") is not None:
+                cam.rotation = int(changes["rotation"]) % 360
+                self.capture.set_rotation(cam.rotation)
+            save_config(self.settings.config_path, self.config)
+            return {"rotation": cam.rotation}
+
     def reconfigure_revolution(self, changes: dict) -> dict:
         """Apply UI-driven changes to the revolution detector and persist them."""
         with self._lock:

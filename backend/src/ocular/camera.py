@@ -117,10 +117,14 @@ class Capture:
     def __init__(self, cfg: CameraConfig) -> None:
         self._cfg = cfg
         self._source = build_source(cfg)
+        self._rotation = cfg.rotation  # mutable: tunable live from the UI
         self._latest: np.ndarray | None = None
         self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
+
+    def set_rotation(self, rotation: int) -> None:
+        self._rotation = rotation % 360
 
     @property
     def is_synthetic(self) -> bool:
@@ -135,7 +139,7 @@ class Capture:
     def _loop(self) -> None:
         while self._running:
             try:
-                frame = _rotate(self._source.capture(), self._cfg.rotation)
+                frame = _rotate(self._source.capture(), self._rotation)
                 with self._lock:
                     self._latest = frame
             except Exception as e:  # keep the thread alive across transient errors

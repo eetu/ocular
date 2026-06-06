@@ -44,6 +44,11 @@
       };
     api.setRevolution(changes).catch((e) => (error = String(e)));
   }
+
+  function applyRotation(rotation: number) {
+    if (config) config.camera.rotation = rotation;
+    api.setCamera({ rotation }).catch((e) => (error = String(e)));
+  }
 </script>
 
 <header>
@@ -67,7 +72,9 @@
       config={config.detectors.revolution}
       bind:mask
       roiMean={rev?.roi_mean ?? 0}
+      rotation={config.camera.rotation}
       onchange={applyRevolution}
+      onrotate={applyRotation}
     />
   {:else if !error}
     <div class="loading">connecting…</div>

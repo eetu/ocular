@@ -88,6 +88,11 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
         changes = await request.json()
         return JSONResponse(pipeline.reconfigure_revolution(changes))
 
+    @app.post("/api/camera/config")
+    async def set_camera(request: Request) -> JSONResponse:
+        changes = await request.json()
+        return JSONResponse(pipeline.reconfigure_camera(changes))
+
     @app.get("/stream.mjpg")
     def stream(mask: int = 0) -> StreamingResponse:
         def frames() -> Iterator[bytes]:
