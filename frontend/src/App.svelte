@@ -17,6 +17,18 @@
 
   const rev = $derived(live?.detectors.revolution ?? null);
 
+  // A 90°/270° rotation swaps the frame's width/height (np.rot90 on the backend),
+  // so the stream — and the ROI coordinate space the backend draws + detects in —
+  // is portrait. The overlay must scale against those effective dims, not the raw
+  // camera dims, or the orange box and the real detection region drift apart.
+  const rotated = $derived((config?.camera.rotation ?? 0) % 180 !== 0);
+  const procWidth = $derived(
+    (rotated ? config?.camera.height : config?.camera.width) ?? 0,
+  );
+  const procHeight = $derived(
+    (rotated ? config?.camera.width : config?.camera.height) ?? 0,
+  );
+
   $effect(() => {
     api
       .config()
@@ -62,8 +74,8 @@
   {#if config}
     <LiveView
       roi={config.detectors.revolution.roi}
-      procWidth={config.camera.width}
-      procHeight={config.camera.height}
+      {procWidth}
+      {procHeight}
       {mask}
       onchange={(roi) => applyRevolution({ roi })}
     />
