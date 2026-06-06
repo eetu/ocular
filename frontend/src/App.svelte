@@ -99,6 +99,11 @@
       title="live capture rate (drops when the wheel is still)"
       >{live.capture_fps} fps</span
     >{/if}
+  {#if live?.blind}<span
+      class="badge blind"
+      title="too dark to see the marker — counting paused until there's light"
+      >camera dark — paused</span
+    >{/if}
 </header>
 
 <!-- Fixed toast: overlays, never reflows the content beneath it. -->
@@ -134,6 +139,7 @@
       config={config.detectors.revolution}
       bind:mask
       coverage={rev?.coverage ?? 0}
+      liveThreshold={rev?.threshold ?? config.detectors.revolution.threshold}
       rotation={config.camera.rotation}
       fps={config.camera.fps}
       onchange={applyRevolution}
@@ -166,6 +172,10 @@
   .badge.viewers {
     color: var(--halo-text-muted);
     border-color: var(--halo-border);
+  }
+  .badge.blind {
+    color: var(--halo-error);
+    border-color: var(--halo-error);
   }
   main {
     max-width: 560px;

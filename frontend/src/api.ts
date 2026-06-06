@@ -8,12 +8,14 @@ export type RevolutionState = {
   marker_present: boolean;
   coverage: number;
   min_coverage: number;
+  threshold: number;
 };
 
 export type StateResponse = {
   synthetic: boolean;
   viewers: number;
   capture_fps: number;
+  blind: boolean;
   detectors: { revolution?: RevolutionState };
 };
 
@@ -21,6 +23,7 @@ export type RevolutionConfig = {
   enabled: boolean;
   roi: [number, number, number, number];
   threshold: number;
+  auto_threshold: boolean;
   min_coverage: number;
   debounce_frames: number;
   wheel_circumference_m: number;

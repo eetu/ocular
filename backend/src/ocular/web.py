@@ -167,6 +167,7 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
             "synthetic": pipeline.is_synthetic,
             "viewers": hub.viewers,
             "capture_fps": pipeline.effective_fps,
+            "blind": pipeline.is_blind,
             "detectors": pipeline.states(),
         }
 

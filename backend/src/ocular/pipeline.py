@@ -28,6 +28,10 @@ from .detectors.revolution import RevolutionDetector
 _MOTION_STEP = 16  # px stride → ~30x40 samples on a 480x640 frame, near-free
 _MOTION_EPS = 2.0  # 0-255; below this the scene is treated as still
 _IDLE_AFTER_S = 4.0  # stay at full fps this long after the last motion
+# Whole-scene brightness floor: below this the camera can't see contrast (lights
+# off), so counting pauses rather than logging garbage. The contrast detector is
+# blind in the dark — real night counting needs a NoIR cam + IR illuminator.
+_DARK_FLOOR = 22.0
 
 
 class Pipeline:
@@ -44,6 +48,8 @@ class Pipeline:
         self._effective_fps = max(1, config.camera.fps)
         self._last_motion = 0.0
         self._prev_small: np.ndarray | None = None
+        self._scene_brightness = 255.0
+        self._blind = False
 
         rev = RevolutionDetector()
         rev.configure(config.detectors.revolution)
@@ -74,10 +80,13 @@ class Pipeline:
                 time.sleep(0.05)
                 continue
             now = time.monotonic()
-            with self._lock:
-                for det in self.detectors.values():
-                    det.process(frame)
+            # Motion/brightness gate first — it sets _blind, which decides whether
+            # detection runs at all (no counting when the camera can't see).
             self._adapt_fps(frame, now)
+            if not self._blind:
+                with self._lock:
+                    for det in self.detectors.values():
+                        det.process(frame)
             if now - last_save > 10.0:
                 self._save_state()
                 last_save = now
@@ -93,6 +102,9 @@ class Pipeline:
             if float(np.abs(small - self._prev_small).mean()) > _MOTION_EPS:
                 self._last_motion = now
         self._prev_small = small
+        # Whole-scene brightness → blind-guard (lights off → can't see contrast).
+        self._scene_brightness = float(small.mean())
+        self._blind = self._scene_brightness < _DARK_FLOOR
 
         active_fps = max(1, self.config.camera.fps)
         idle_fps = self.config.camera.idle_fps
@@ -112,6 +124,11 @@ class Pipeline:
     def seconds_since_motion(self) -> float:
         """How long the scene has been still — drives the stream's idle-stop."""
         return time.monotonic() - self._last_motion
+
+    @property
+    def is_blind(self) -> bool:
+        """True when the scene is too dark to see contrast — counting is paused."""
+        return self._blind
 
     # --- reads ---
 
@@ -157,8 +174,8 @@ class Pipeline:
         """Apply UI-driven changes to the revolution detector and persist them."""
         with self._lock:
             cfg = self.config.detectors.revolution
-            for key in ("enabled", "roi", "threshold", "min_coverage", "debounce_frames",
-                        "wheel_circumference_m", "marker_is_dark"):
+            for key in ("enabled", "roi", "threshold", "auto_threshold", "min_coverage",
+                        "debounce_frames", "wheel_circumference_m", "marker_is_dark"):
                 if key in changes and changes[key] is not None:
                     setattr(cfg, key, changes[key])
             self.detectors["revolution"].configure(cfg)

@@ -26,6 +26,27 @@ from ..config import RevolutionConfig
 from . import Detector
 
 
+def _otsu(gray: np.ndarray) -> int:
+    """Otsu's threshold: the 0-255 cut that best splits the ROI into two classes
+    (dark marker vs light rim) by maximising between-class variance. Tracks the
+    split as overall light changes, so dusk doesn't need a manual re-tune.
+    Vectorised over the 256-bin histogram — cheap on a small ROI."""
+    hist = np.bincount(gray.ravel(), minlength=256)[:256].astype(np.float64)
+    w = hist.cumsum()  # cumulative pixel count below each level
+    if w[-1] == 0:
+        return 128
+    levels = np.arange(256, dtype=np.float64)
+    s = (hist * levels).cumsum()
+    total, sum_t = w[-1], s[-1]
+    wf = total - w
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mb = s / w
+        mf = (sum_t - s) / wf
+        between = w * wf * (mb - mf) ** 2
+    between[~np.isfinite(between)] = 0.0
+    return int(between.argmax())
+
+
 class RevolutionDetector(Detector):
     name = "revolution"
 
@@ -40,6 +61,7 @@ class RevolutionDetector(Detector):
         self._last_cross = 0.0
         self._rpm = 0.0
         self._last_coverage = 0.0
+        self._last_threshold = 0
         self._active = False  # marker currently in the ROI (debounced)
 
     def configure(self, cfg: RevolutionConfig) -> None:
@@ -57,16 +79,17 @@ class RevolutionDetector(Detector):
             return
         # Grayscale ONLY the ROI (channel-mean luminance) — never the whole
         # frame. Order-agnostic, so picamera2's BGR-vs-RGB quirk doesn't matter.
-        gray_roi = frame[y0:y1, x0:x1].mean(axis=2)
+        gray_roi = frame[y0:y1, x0:x1].mean(axis=2).astype(np.uint8)
+        # Auto-threshold (Otsu) tracks the marker/rim split as light changes;
+        # else use the fixed cutoff.
+        thr = _otsu(gray_roi) if self._cfg.auto_threshold else self._cfg.threshold
+        self._last_threshold = thr
         # Fraction of ROI pixels matching the marker (dark by default, light if
         # marker_is_dark is false). A per-pixel test, not a whole-ROI mean, so a
         # small tape band crossing a tall ROI still registers — the metric scales
         # with marker coverage, not with how much empty rim shares the box.
-        hit = (
-            gray_roi < self._cfg.threshold
-            if self._cfg.marker_is_dark
-            else gray_roi > self._cfg.threshold
-        )
+        # Otsu's convention: class 0 (the marker, when dark) is value <= thr.
+        hit = gray_roi <= thr if self._cfg.marker_is_dark else gray_roi > thr
         coverage = float(hit.mean())
         self._last_coverage = coverage
 
@@ -105,6 +128,7 @@ class RevolutionDetector(Detector):
             "marker_present": self._active,
             "coverage": round(self._last_coverage, 3),
             "min_coverage": self._cfg.min_coverage,
+            "threshold": self._last_threshold,
         }
 
     def overlay(self) -> dict | None:

@@ -8,6 +8,7 @@
     config,
     mask = $bindable(),
     coverage,
+    liveThreshold,
     rotation,
     fps,
     onchange,
@@ -17,6 +18,7 @@
     config: RevolutionConfig;
     mask: boolean;
     coverage: number;
+    liveThreshold: number;
     rotation: number;
     fps: number;
     onchange: (changes: Partial<RevolutionConfig>) => void;
@@ -64,19 +66,40 @@
     between frames. The preview is capped at 12 fps to spare the Pi.
   </div>
 
+  <label class="toggle">
+    <input
+      type="checkbox"
+      checked={config.auto_threshold}
+      onchange={(e) => onchange({ auto_threshold: e.currentTarget.checked })}
+    />
+    <span>auto threshold (adapt to light)</span>
+  </label>
+  <div class="hint">
+    Picks the marker/rim cutoff from the image itself each frame, so it keeps
+    working as light changes (dusk). Off = use the fixed value below. Either way
+    counting pauses when it's too dark to see the marker.
+  </div>
+
   <label class="row">
-    <span>threshold <em class="mono-num">{config.threshold}</em></span>
+    <span
+      >threshold {config.auto_threshold ? "(auto)" : ""}
+      <em class="mono-num"
+        >{config.auto_threshold ? liveThreshold : config.threshold}</em
+      ></span
+    >
     <input
       type="range"
       min="0"
       max="255"
+      disabled={config.auto_threshold}
       value={config.threshold}
       oninput={(e) => onchange({ threshold: +e.currentTarget.value })}
     />
   </label>
   <div class="hint">
     Brightness cutoff (0–255). Pixels darker than this count as marker — in mask
-    view they turn black. Black tape on a light rim → keep it low (~60).
+    view they turn black. Black tape on a light rim → keep it low (~60). When
+    auto is on this tracks live; the slider is the manual fallback.
   </div>
 
   <label class="row">
@@ -173,6 +196,9 @@
     width: 100%;
     accent-color: var(--halo-accent);
     height: 1.6rem;
+  }
+  input[type="range"]:disabled {
+    opacity: 0.4;
   }
   .toggle {
     display: flex;

@@ -54,8 +54,13 @@ class RevolutionConfig:
     roi: list[int] = field(default_factory=lambda: [280, 160, 60, 220])
     # 0-255 per-pixel brightness cutoff. A pixel counts as "marker" when it's
     # darker than this (or lighter, if marker_is_dark is false). Black tape on a
-    # light rim → a low threshold like 60 works.
+    # light rim → a low threshold like 60 works. Used as-is when auto_threshold
+    # is off; otherwise it's just the seed/fallback.
     threshold: int = 60
+    # Auto-tune the threshold from the ROI's own histogram (Otsu) each frame, so
+    # the marker/rim split tracks changing light (dusk) without re-tuning. The
+    # whole-scene blind-guard takes over once it's genuinely too dark to see.
+    auto_threshold: bool = True
     # Fraction (0-1) of ROI pixels that must match the marker for it to count as
     # present. Decouples detection from ROI size: a short tape band crossing a
     # tall ROI still spikes coverage, where a whole-ROI *mean* would barely move.
