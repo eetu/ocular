@@ -37,31 +37,43 @@ _BOUNDARY = "ocularframe"
 # detector samples at the full camera fps; the *preview* doesn't need to, so cap
 # it well below so a 30/60 fps capture rate can't peg the CPU on encoding.
 _STREAM_FPS_CAP = 12
+# Cheap preview trims (the preview is a phone-screen monitor, not the data path):
+# subsample to 1/_STREAM_SCALE per axis — free, it's a numpy stride view, and
+# quarters the pixels the JPEG encoder touches — and use a lower JPEG quality.
+# The browser scales the <img> to full width anyway, and the ROI overlay aligns
+# regardless (it's positioned in display px, not stream px).
+_STREAM_SCALE = 2
+_STREAM_QUALITY = 55
+# Stop encoding entirely once the scene has been still this long, even with a tab
+# left open — the viewer just holds the last frame; encoding resumes on motion.
+_STREAM_IDLE_STOP_S = 15.0
 # accent #f78f08 (active) / muted grey (idle) — matches halo-design tokens.
 _ACTIVE_RGB = (247, 143, 8)
 _IDLE_RGB = (160, 160, 160)
 
 
-def _encode_jpeg(img: Image.Image, quality: int = 70) -> bytes:
+def _encode_jpeg(img: Image.Image, quality: int = _STREAM_QUALITY) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=quality)
     return buf.getvalue()
 
 
 def _render(frame: np.ndarray, overlays: list[dict], *, mask: bool, threshold: int) -> bytes:
+    s = _STREAM_SCALE
+    small = frame[::s, ::s]  # stride view — no copy
     if mask:
         # Show exactly what the detector sees: ROI-threshold as black/white.
-        gray = frame.mean(axis=2).astype(np.uint8)
+        gray = small.mean(axis=2).astype(np.uint8)
         binary = np.where(gray < threshold, 0, 255).astype(np.uint8)
         img = Image.fromarray(binary, mode="L").convert("RGB")
     else:
         # picamera2 "RGB888" is BGR-in-memory; swap to RGB for correct display.
-        img = Image.fromarray(frame[..., ::-1])
+        img = Image.fromarray(small[..., ::-1])
     draw = ImageDraw.Draw(img)
     for ov in overlays:
-        x, y, w, h = ov.get("roi", (0, 0, 0, 0))
+        x, y, w, h = (v // s for v in ov.get("roi", (0, 0, 0, 0)))
         color = _ACTIVE_RGB if ov.get("active") else _IDLE_RGB
-        draw.rectangle([x, y, x + w, y + h], outline=color, width=3)
+        draw.rectangle([x, y, x + w, y + h], outline=color, width=2)
         label = ov.get("label")
         if label:
             draw.text((x + 4, y + 4), label, fill=color)
@@ -118,6 +130,11 @@ class StreamHub:
                 if self._viewers == 0:
                     self._jpeg = None  # drop the last frame; encoder exits
                     return
+            if self._pipeline.seconds_since_motion() > _STREAM_IDLE_STOP_S:
+                # Scene parked — stop encoding (viewers hold the last frame),
+                # just poll cheaply for motion to resume.
+                time.sleep(0.5)
+                continue
             frame = self._pipeline.latest_frame()
             if frame is not None:
                 threshold = self._pipeline.config.detectors.revolution.threshold

@@ -54,6 +54,7 @@ class Pipeline:
     def start(self) -> None:
         self._load_state()
         self.capture.start()
+        self._last_motion = time.monotonic()  # treat startup as active
         self._running = True
         self._thread = threading.Thread(target=self._loop, name="ocular-pipeline", daemon=True)
         self._thread.start()
@@ -83,19 +84,22 @@ class Pipeline:
             time.sleep(1.0 / self._effective_fps)
 
     def _adapt_fps(self, frame: np.ndarray, now: float) -> None:
-        """Ramp capture fps to camera.fps on scene motion, drop to idle_fps when
-        still. Cheap: a coarse subsample + frame-to-frame luminance delta."""
+        """Track scene motion (cheap coarse subsample + frame-to-frame luminance
+        delta) and, when idling is enabled, ramp capture fps to camera.fps on
+        motion / drop to idle_fps when still. The motion timestamp is also what
+        the stream encoder uses to pause on a parked scene."""
+        small = frame[::_MOTION_STEP, ::_MOTION_STEP].mean(axis=2)
+        if self._prev_small is not None and small.shape == self._prev_small.shape:
+            if float(np.abs(small - self._prev_small).mean()) > _MOTION_EPS:
+                self._last_motion = now
+        self._prev_small = small
+
         active_fps = max(1, self.config.camera.fps)
         idle_fps = self.config.camera.idle_fps
-        # idle_fps <= 0 (or >= active) disables idling — just hold the active rate.
+        # idle_fps <= 0 (or >= active) disables fps idling — hold the active rate.
         if idle_fps <= 0 or idle_fps >= active_fps:
             target = active_fps
         else:
-            small = frame[::_MOTION_STEP, ::_MOTION_STEP].mean(axis=2)
-            if self._prev_small is not None and small.shape == self._prev_small.shape:
-                if float(np.abs(small - self._prev_small).mean()) > _MOTION_EPS:
-                    self._last_motion = now
-            self._prev_small = small
             target = active_fps if (now - self._last_motion) < _IDLE_AFTER_S else idle_fps
         if target != self._effective_fps:
             self._effective_fps = target
@@ -104,6 +108,10 @@ class Pipeline:
     @property
     def effective_fps(self) -> int:
         return self._effective_fps
+
+    def seconds_since_motion(self) -> float:
+        """How long the scene has been still — drives the stream's idle-stop."""
+        return time.monotonic() - self._last_motion
 
     # --- reads ---
 
