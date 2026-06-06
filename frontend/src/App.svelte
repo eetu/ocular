@@ -61,6 +61,11 @@
     if (config) config.camera.rotation = rotation;
     api.setCamera({ rotation }).catch((e) => (error = String(e)));
   }
+
+  function applyFps(fps: number) {
+    if (config) config.camera.fps = fps;
+    api.setCamera({ fps }).catch((e) => (error = String(e)));
+  }
 </script>
 
 <header>
@@ -68,9 +73,10 @@
   {#if live?.synthetic}<span class="badge">synthetic</span>{/if}
 </header>
 
-<main>
-  {#if error}<div class="error halo-card">{error}</div>{/if}
+<!-- Fixed toast: overlays, never reflows the content beneath it. -->
+{#if error}<div class="error halo-card" role="alert">{error}</div>{/if}
 
+<main>
   {#if config}
     <LiveView
       roi={config.detectors.revolution.roi}
@@ -85,8 +91,10 @@
       bind:mask
       coverage={rev?.coverage ?? 0}
       rotation={config.camera.rotation}
+      fps={config.camera.fps}
       onchange={applyRevolution}
       onrotate={applyRotation}
+      onfps={applyFps}
     />
   {:else if !error}
     <div class="loading">connecting…</div>
@@ -120,8 +128,16 @@
     gap: 1rem;
   }
   .error {
+    position: fixed;
+    top: 0.75rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    max-width: min(520px, calc(100vw - 2rem));
     color: var(--halo-error);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    box-shadow: var(--halo-shadow, 0 4px 16px rgb(0 0 0 / 0.25));
+    pointer-events: none;
   }
   .loading {
     text-align: center;

@@ -30,6 +30,10 @@ from .config import Settings
 from .pipeline import Pipeline
 
 _BOUNDARY = "ocularframe"
+# The MJPEG preview is JPEG-encoded per frame — the heavy bit on a Pi 3 B+. The
+# detector samples at the full camera fps; the *preview* doesn't need to, so cap
+# it well below so a 30/60 fps capture rate can't peg the CPU on encoding.
+_STREAM_FPS_CAP = 12
 # accent #f78f08 (active) / muted grey (idle) — matches halo-design tokens.
 _ACTIVE_RGB = (247, 143, 8)
 _IDLE_RGB = (160, 160, 160)
@@ -96,7 +100,6 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
     @app.get("/stream.mjpg")
     def stream(mask: int = 0) -> StreamingResponse:
         def frames() -> Iterator[bytes]:
-            interval = 1.0 / max(1, pipeline.config.camera.fps)
             while True:
                 frame = pipeline.latest_frame()
                 if frame is None:
@@ -108,7 +111,9 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
                     f"--{_BOUNDARY}\r\nContent-Type: image/jpeg\r\n"
                     f"Content-Length: {len(jpeg)}\r\n\r\n"
                 ).encode() + jpeg + b"\r\n"
-                time.sleep(interval)
+                # Cap the preview rate (see _STREAM_FPS_CAP), independent of the
+                # detector's full-fps sampling.
+                time.sleep(1.0 / min(max(1, pipeline.config.camera.fps), _STREAM_FPS_CAP))
 
         return StreamingResponse(
             frames(),

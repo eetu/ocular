@@ -36,6 +36,9 @@ class CameraSource:
         """Return one frame as an HxWx3 uint8 array."""
         raise NotImplementedError
 
+    def set_fps(self, fps: int) -> None:
+        """Retune the capture frame rate live (no-op if the source can't)."""
+
     def stop(self) -> None: ...
 
 
@@ -60,6 +63,13 @@ class Picamera2Source(CameraSource):
 
     def capture(self) -> np.ndarray:
         return self._cam.capture_array()
+
+    def set_fps(self, fps: int) -> None:
+        if self._cam is not None:
+            try:
+                self._cam.set_controls({"FrameRate": float(fps)})
+            except Exception as e:  # control may be momentarily unsettable
+                print(f"ocular: could not set FrameRate={fps}: {e}")
 
     def stop(self) -> None:
         if self._cam is not None:
@@ -125,6 +135,13 @@ class Capture:
 
     def set_rotation(self, rotation: int) -> None:
         self._rotation = rotation % 360
+
+    def set_fps(self, fps: int) -> None:
+        # _cfg is the shared CameraConfig, so the synthetic source's pacing and
+        # the pipeline/stream loop intervals pick this up; the real camera needs
+        # an explicit control change.
+        self._cfg.fps = fps
+        self._source.set_fps(fps)
 
     @property
     def is_synthetic(self) -> bool:

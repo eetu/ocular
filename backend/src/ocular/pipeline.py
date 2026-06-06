@@ -58,7 +58,6 @@ class Pipeline:
         self.capture.stop()
 
     def _loop(self) -> None:
-        interval = 1.0 / max(1, self.config.camera.fps)
         last_save = 0.0
         while self._running:
             frame = self.capture.latest()
@@ -73,7 +72,8 @@ class Pipeline:
             if now - last_save > 10.0:
                 self._save_state()
                 last_save = now
-            time.sleep(interval)
+            # Read fps each tick so a live change takes effect immediately.
+            time.sleep(1.0 / max(1, self.config.camera.fps))
 
     # --- reads ---
 
@@ -95,15 +95,19 @@ class Pipeline:
     # --- live reconfigure ---
 
     def reconfigure_camera(self, changes: dict) -> dict:
-        """Apply UI-driven camera changes (rotation is the live-tunable one) and
-        persist them. Rotation takes effect on the next captured frame."""
+        """Apply UI-driven camera changes (rotation, fps) and persist them.
+        Both take effect immediately — rotation on the next captured frame, fps
+        on the next loop tick (and via a live control change on the real camera)."""
         with self._lock:
             cam = self.config.camera
             if changes.get("rotation") is not None:
                 cam.rotation = int(changes["rotation"]) % 360
                 self.capture.set_rotation(cam.rotation)
+            if changes.get("fps") is not None:
+                cam.fps = max(1, int(changes["fps"]))
+                self.capture.set_fps(cam.fps)
             save_config(self.settings.config_path, self.config)
-            return {"rotation": cam.rotation}
+            return {"rotation": cam.rotation, "fps": cam.fps}
 
     def reconfigure_revolution(self, changes: dict) -> dict:
         """Apply UI-driven changes to the revolution detector and persist them."""

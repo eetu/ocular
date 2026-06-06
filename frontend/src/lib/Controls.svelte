@@ -1,5 +1,6 @@
-<!-- Detector tuning: threshold, mask preview toggle, marker polarity, debounce,
-     enable. Changes apply live (parent POSTs to the backend). -->
+<!-- Detector tuning: orientation, capture fps, threshold, coverage trigger, mask
+     preview, marker polarity, debounce, enable — each with an inline hint and a
+     "how it works" disclosure. Changes apply live (parent POSTs to the backend). -->
 <script lang="ts">
   import type { RevolutionConfig } from "../api";
 
@@ -8,24 +9,59 @@
     mask = $bindable(),
     coverage,
     rotation,
+    fps,
     onchange,
     onrotate,
+    onfps,
   }: {
     config: RevolutionConfig;
     mask: boolean;
     coverage: number;
     rotation: number;
+    fps: number;
     onchange: (changes: Partial<RevolutionConfig>) => void;
     onrotate: (rotation: number) => void;
+    onfps: (fps: number) => void;
   } = $props();
+
+  const FPS_OPTIONS = [15, 30, 60];
 </script>
 
 <div class="controls halo-card">
+  <details class="help">
+    <summary>how it works</summary>
+    <p>
+      The counter watches one region (the orange box) and ticks once each time
+      the high-contrast marker — black tape on the rim — sweeps through it. Aim:
+      turn on <em>mask</em>, place the box on the marker's track, and tune so
+      the box reads mostly rim normally and floods with marker pixels as the
+      tape passes.
+    </p>
+  </details>
+
   <div class="rotate">
     <span>orientation <em class="mono-num">{rotation}°</em></span>
     <button type="button" onclick={() => onrotate((rotation + 90) % 360)}
       >rotate 90°</button
     >
+  </div>
+  <div class="hint">Rotate the feed upright. The ROI rotates with it.</div>
+
+  <div class="rotate">
+    <span>capture fps <em class="mono-num">{fps}</em></span>
+    <div class="segmented">
+      {#each FPS_OPTIONS as opt (opt)}
+        <button
+          type="button"
+          class:active={fps === opt}
+          onclick={() => onfps(opt)}>{opt}</button
+        >
+      {/each}
+    </div>
+  </div>
+  <div class="hint">
+    Detection sample rate — raise it for a fast wheel so the marker isn't missed
+    between frames. The preview is capped at 12 fps to spare the Pi.
   </div>
 
   <label class="row">
@@ -38,6 +74,11 @@
       oninput={(e) => onchange({ threshold: +e.currentTarget.value })}
     />
   </label>
+  <div class="hint">
+    Brightness cutoff (0–255). Pixels darker than this count as marker — in mask
+    view they turn black. Black tape on a light rim → keep it low (~60).
+  </div>
+
   <label class="row">
     <span
       >coverage trigger
@@ -56,11 +97,20 @@
       config.min_coverage * 100,
     )}%)
   </div>
+  <div class="hint">
+    How much of the box must be marker pixels to count as present. Set it
+    between the empty-box and tape-passing readings above. Raise it if noise
+    triggers.
+  </div>
 
   <label class="toggle">
     <input type="checkbox" bind:checked={mask} />
     <span>show threshold mask</span>
   </label>
+  <div class="hint">
+    Shows exactly what the detector sees: black = marker pixels, white = rim.
+    Use it to aim and size the box.
+  </div>
 
   <label class="toggle">
     <input
@@ -70,6 +120,10 @@
     />
     <span>marker is dark</span>
   </label>
+  <div class="hint">
+    On: dark tape on a light rim (default). Off: a light/reflective marker on a
+    dark rim.
+  </div>
 
   <label class="row">
     <span>debounce <em class="mono-num">{config.debounce_frames}f</em></span>
@@ -81,6 +135,10 @@
       oninput={(e) => onchange({ debounce_frames: +e.currentTarget.value })}
     />
   </label>
+  <div class="hint">
+    Frames the marker must stay present (or absent) before the state flips.
+    Higher rejects noise but can miss very fast passes; lower is twitchier.
+  </div>
 
   <label class="toggle">
     <input
@@ -133,8 +191,51 @@
   }
   .hint {
     font-size: 0.75rem;
+    line-height: 1.35;
     color: var(--halo-text-light);
-    margin-top: -0.4rem;
+    margin-top: -0.6rem;
+  }
+  .help {
+    font-family: var(--halo-font-heading);
+    font-size: 0.8rem;
+    color: var(--halo-text-muted);
+  }
+  .help summary {
+    cursor: pointer;
+    text-transform: lowercase;
+    color: var(--halo-accent);
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .help p {
+    margin: 0.2rem 0 0;
+    line-height: 1.5;
+    color: var(--halo-text-light);
+    text-transform: none;
+  }
+  .help em {
+    color: var(--halo-accent);
+    font-style: normal;
+  }
+  .segmented {
+    display: flex;
+    gap: 0.3rem;
+  }
+  .segmented button {
+    font-family: var(--halo-font-heading);
+    font-size: 0.8rem;
+    min-width: 44px;
+    min-height: 44px;
+    color: var(--halo-text-main);
+    background: var(--halo-bg-light);
+    border: 1px solid var(--halo-border);
+    border-radius: var(--halo-radius-pill);
+    cursor: pointer;
+  }
+  .segmented button.active {
+    border-color: var(--halo-accent);
+    color: var(--halo-accent);
   }
   .rotate {
     display: flex;
