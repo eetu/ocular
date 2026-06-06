@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [[ -z "$STAGED" ]]; then
+  exit 0
+fi
+
+if echo "$STAGED" | grep -q "^frontend/"; then
+  echo "→ frontend typecheck + format check..."
+  (cd "$ROOT/frontend" && yarn typecheck && yarn format)
+fi
+
+if echo "$STAGED" | grep -qE "^backend/.*\.py$|^backend/pyproject\.toml$"; then
+  echo "→ backend ruff..."
+  (cd "$ROOT/backend" && uv run ruff check src)
+fi

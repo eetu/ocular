@@ -1,0 +1,48 @@
+[project]
+name = "ocular"
+version = "0.1.0"
+description = "Camera-vision app — pluggable detector pipeline over a Pi camera feed"
+requires-python = ">=3.11"
+dependencies = [
+  # Plain uvicorn (not [standard]): a loopback, low-QPS appliance on a 1 GB Pi
+  # doesn't need uvloop/httptools/websockets/watchfiles. Falls back to asyncio + h11.
+  "fastapi>=0.136.1",
+  "uvicorn>=0.47.0",
+  "numpy>=1.26",
+  # Pillow does JPEG encode + ROI/overlay drawing — we skip OpenCV entirely
+  # (numpy handles the grayscale/threshold the detectors need), one fewer heavy
+  # ARM dependency on the Pi.
+  "pillow>=10.0",
+]
+
+# picamera2 only resolves/builds on the Pi (libcamera + ARM wheels). It's an
+# optional extra so the package installs on a dev Mac / in CI without it — the
+# capture layer degrades to a synthetic fallback source when absent. On the Pi
+# picamera2 comes from apt (system site-packages, see tasks/camera.py in the
+# raspi repo); this extra is only for a pip-only Pi install.
+# picamera2 is intentionally NOT a declared dependency: it's linux/libcamera-only
+# (its python-prctl dep won't even resolve off-linux) and on the Pi it's provided
+# by the system (apt python3-picamera2, via a --system-site-packages venv — see
+# tasks/camera.py in the raspi repo). camera.py imports it lazily and falls back
+# to a synthetic source when absent, so the package stays cross-platform for dev
+# + CI. The container build installs it explicitly (see Dockerfile).
+
+[project.scripts]
+ocular = "ocular.__main__:main"
+
+[dependency-groups]
+dev = ["ruff>=0.15.14"]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ocular"]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]

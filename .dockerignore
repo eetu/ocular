@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+.git
+data
+*.log
+.github
+.claude
+README.md
+SECURITY.md

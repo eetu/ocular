@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"
+     fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!-- ocular glyph: an eye. currentColor outline inherits theme text color; the
+       only hardcoded color is the warm accent pupil (#f78f08), the family's
+       "warm centre". -->
+  <path d="M4 32 Q32 11 60 32 Q32 53 4 32 Z" stroke-width="3"/>
+  <circle cx="32" cy="32" r="11" stroke-width="2.5"/>
+  <circle cx="32" cy="32" r="4.5" fill="#f78f08" stroke="none"/>
+</svg>

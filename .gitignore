@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[oc]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Frontend
+node_modules/
+frontend/dist/
+**/.yarn/*
+!**/.yarn/patches
+!**/.yarn/releases
+!**/.yarn/plugins
+!**/.yarn/sdks
+.pnp.*
+
+# Runtime / local
+data/
+*.log

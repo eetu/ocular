@@ -1,0 +1,28 @@
+@import "./styles/colors_and_type.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--halo-body);
+  color: var(--halo-text-main);
+  font-family: var(--halo-font-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  /* Respect iPhone safe areas (notch / home indicator). */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Space Grotesk for numerals/labels — the "counter" feel. */
+.mono-num {
+  font-family: var(--halo-font-heading);
+  font-variant-numeric: tabular-nums;
+}
