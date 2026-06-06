@@ -45,22 +45,28 @@ class RevolutionDetector(Detector):
     def configure(self, cfg: RevolutionConfig) -> None:
         self._cfg = cfg
 
-    def process(self, gray: np.ndarray) -> None:
+    def process(self, frame: np.ndarray) -> None:
         if not self._cfg.enabled:
             return
         x, y, w, h = self._cfg.roi
-        h_img, w_img = gray.shape[:2]
+        h_img, w_img = frame.shape[:2]
         # Clamp the ROI to the frame so a stale/oversized box can't IndexError.
         x0, y0 = max(0, x), max(0, y)
         x1, y1 = min(w_img, x + w), min(h_img, y + h)
         if x1 <= x0 or y1 <= y0:
             return
-        roi = gray[y0:y1, x0:x1]
+        # Grayscale ONLY the ROI (channel-mean luminance) — never the whole
+        # frame. Order-agnostic, so picamera2's BGR-vs-RGB quirk doesn't matter.
+        gray_roi = frame[y0:y1, x0:x1].mean(axis=2)
         # Fraction of ROI pixels matching the marker (dark by default, light if
         # marker_is_dark is false). A per-pixel test, not a whole-ROI mean, so a
         # small tape band crossing a tall ROI still registers — the metric scales
         # with marker coverage, not with how much empty rim shares the box.
-        hit = roi < self._cfg.threshold if self._cfg.marker_is_dark else roi > self._cfg.threshold
+        hit = (
+            gray_roi < self._cfg.threshold
+            if self._cfg.marker_is_dark
+            else gray_roi > self._cfg.threshold
+        )
         coverage = float(hit.mean())
         self._last_coverage = coverage
 

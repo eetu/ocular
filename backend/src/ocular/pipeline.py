@@ -20,12 +20,6 @@ from .detectors import Detector
 from .detectors.revolution import RevolutionDetector
 
 
-def _to_gray(frame: np.ndarray) -> np.ndarray:
-    """Channel-mean luminance (uint8). Order-agnostic, so picamera2's BGR-vs-RGB
-    quirk doesn't matter for detection."""
-    return frame.mean(axis=2).astype(np.uint8)
-
-
 class Pipeline:
     def __init__(self, config: Config, settings: Settings) -> None:
         self.config = config
@@ -64,10 +58,9 @@ class Pipeline:
             if frame is None:
                 time.sleep(0.05)
                 continue
-            gray = _to_gray(frame)
             with self._lock:
                 for det in self.detectors.values():
-                    det.process(gray)
+                    det.process(frame)
             now = time.monotonic()
             if now - last_save > 10.0:
                 self._save_state()

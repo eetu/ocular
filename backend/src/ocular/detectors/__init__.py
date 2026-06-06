@@ -1,8 +1,10 @@
 """Detector plugin API.
 
 A detector consumes frames and emits a small JSON-able state dict. The pipeline
-feeds every enabled detector the same grayscale frame each tick; detectors are
-deliberately cheap and stateful (they hold their own counters / history).
+feeds every enabled detector the same raw frame each tick; a detector grayscales
+only the region it cares about (its ROI), so the hot path never pays for a
+full-frame conversion. Detectors are deliberately cheap and stateful (they hold
+their own counters / history).
 
 Add a detector by subclassing Detector and registering it in REGISTRY. The
 revolution counter is the first; motion / face / object are the planned next
@@ -22,8 +24,9 @@ class Detector:
     def configure(self, cfg: object) -> None:
         """Apply a (possibly live-updated) config dataclass."""
 
-    def process(self, gray: np.ndarray) -> None:
-        """Consume one grayscale frame (HxW uint8). Update internal state."""
+    def process(self, frame: np.ndarray) -> None:
+        """Consume one raw frame (HxWx3 uint8). Grayscale only what you need
+        (e.g. the ROI) and update internal state."""
         raise NotImplementedError
 
     def state(self) -> dict:

@@ -24,7 +24,7 @@
     onfps: (fps: number) => void;
   } = $props();
 
-  const FPS_OPTIONS = [15, 30, 60];
+  const FPS_OPTIONS = [15, 20, 30];
 </script>
 
 <div class="controls halo-card">
