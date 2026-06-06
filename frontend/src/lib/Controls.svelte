@@ -14,6 +14,7 @@
     onchange,
     onrotate,
     onfps,
+    onreset,
   }: {
     config: RevolutionConfig;
     mask: boolean;
@@ -24,9 +25,24 @@
     onchange: (changes: Partial<RevolutionConfig>) => void;
     onrotate: (rotation: number) => void;
     onfps: (fps: number) => void;
+    onreset: () => void;
   } = $props();
 
   const FPS_OPTIONS = [15, 20, 30];
+
+  // Reset is two-step: first tap arms it, second within 4s confirms.
+  let resetArmed = $state(false);
+  let resetTimer: ReturnType<typeof setTimeout>;
+  function clickReset() {
+    if (!resetArmed) {
+      resetArmed = true;
+      resetTimer = setTimeout(() => (resetArmed = false), 4000);
+      return;
+    }
+    clearTimeout(resetTimer);
+    resetArmed = false;
+    onreset();
+  }
 </script>
 
 <div class="controls halo-card">
@@ -171,6 +187,15 @@
     />
     <span>detector enabled</span>
   </label>
+
+  <button
+    type="button"
+    class="reset"
+    class:armed={resetArmed}
+    onclick={clickReset}
+  >
+    {resetArmed ? "tap again to confirm reset" : "reset count"}
+  </button>
 </div>
 
 <style>
@@ -262,6 +287,22 @@
   .segmented button.active {
     border-color: var(--halo-accent);
     color: var(--halo-accent);
+  }
+  .reset {
+    font-family: var(--halo-font-heading);
+    text-transform: lowercase;
+    font-size: 0.8rem;
+    color: var(--halo-text-muted);
+    background: transparent;
+    border: 1px solid var(--halo-border);
+    border-radius: var(--halo-radius-pill);
+    padding: 0.6rem 1rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .reset.armed {
+    color: var(--halo-error);
+    border-color: var(--halo-error);
   }
   .rotate {
     display: flex;

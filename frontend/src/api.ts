@@ -49,6 +49,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(changes),
     }).then((r) => json<RevolutionState>(r)),
+  resetRevolution: () =>
+    fetch("/api/detectors/revolution/reset", { method: "POST" }).then((r) =>
+      json<RevolutionState>(r),
+    ),
   setCamera: (changes: Partial<{ rotation: number; fps: number }>) =>
     fetch("/api/camera/config", {
       method: "POST",

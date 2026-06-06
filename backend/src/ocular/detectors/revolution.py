@@ -119,6 +119,12 @@ class RevolutionDetector(Detector):
         """Seed the running total from persisted state on startup."""
         self._count = count
 
+    def reset(self) -> None:
+        """Zero the running total (and derived rate). Marker state is left alone."""
+        self._count = 0
+        self._rpm = 0.0
+        self._last_cross = 0.0
+
     def state(self) -> dict:
         circ = self._cfg.wheel_circumference_m
         return {

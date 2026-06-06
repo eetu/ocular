@@ -170,6 +170,15 @@ class Pipeline:
             save_config(self.settings.config_path, self.config)
             return {"rotation": cam.rotation, "fps": cam.fps, "idle_fps": cam.idle_fps}
 
+    def reset_revolution(self) -> dict:
+        """Zero the revolution count and persist immediately."""
+        with self._lock:
+            det = self.detectors["revolution"]
+            if isinstance(det, RevolutionDetector):
+                det.reset()
+            self._save_state()
+            return det.state()
+
     def reconfigure_revolution(self, changes: dict) -> dict:
         """Apply UI-driven changes to the revolution detector and persist them."""
         with self._lock:

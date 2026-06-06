@@ -180,6 +180,10 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
         changes = await request.json()
         return JSONResponse(pipeline.reconfigure_revolution(changes))
 
+    @app.post("/api/detectors/revolution/reset")
+    def reset_revolution() -> JSONResponse:
+        return JSONResponse(pipeline.reset_revolution())
+
     @app.post("/api/camera/config")
     async def set_camera(request: Request) -> JSONResponse:
         changes = await request.json()

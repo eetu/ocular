@@ -86,6 +86,15 @@
     if (config) config.camera.fps = fps;
     api.setCamera({ fps }).catch((e) => (error = String(e)));
   }
+
+  function resetCount() {
+    api
+      .resetRevolution()
+      .then((s) => {
+        if (live?.detectors.revolution) live.detectors.revolution = s;
+      })
+      .catch((e) => (error = String(e)));
+  }
 </script>
 
 <header>
@@ -145,6 +154,7 @@
       onchange={applyRevolution}
       onrotate={applyRotation}
       onfps={applyFps}
+      onreset={resetCount}
     />
   {:else if !error}
     <div class="loading">connecting…</div>
