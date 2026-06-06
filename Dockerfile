@@ -9,7 +9,7 @@
 # present. Wiring libcamera into the image is the TODO for the quadlet cutover.
 
 # --- Stage 1: build the Svelte SPA (platform-independent output) ---
-FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend-build
+FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend-build
 WORKDIR /app
 COPY frontend/package.json frontend/yarn.lock frontend/.yarnrc.yml ./
 RUN corepack enable && yarn install --immutable --network-timeout 1000000
