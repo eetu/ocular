@@ -188,10 +188,6 @@
     border-radius: var(--halo-radius-pill);
     padding: 0.1rem 0.4rem;
   }
-  .badge.viewers {
-    color: var(--halo-text-muted);
-    border-color: var(--halo-border);
-  }
   .badge.blind {
     color: var(--halo-error);
     border-color: var(--halo-error);

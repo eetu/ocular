@@ -2,6 +2,8 @@
      preview, marker polarity, debounce, enable — each with an inline hint and a
      "how it works" disclosure. Changes apply live (parent POSTs to the backend). -->
 <script lang="ts">
+  import RotateCw from "@lucide/svelte/icons/rotate-cw";
+
   import type { RevolutionConfig } from "../api";
 
   let {
@@ -59,14 +61,20 @@
 
   <div class="rotate">
     <span>orientation <em class="mono-num">{rotation}°</em></span>
-    <button type="button" onclick={() => onrotate((rotation + 90) % 360)}
-      >rotate 90°</button
+    <button
+      type="button"
+      class="icon-btn"
+      aria-label="rotate 90°"
+      title="rotate 90°"
+      onclick={() => onrotate((rotation + 90) % 360)}
     >
+      <RotateCw size={18} aria-hidden="true" />
+    </button>
   </div>
   <div class="hint">Rotate the feed upright. The ROI rotates with it.</div>
 
   <div class="rotate">
-    <span>capture fps <em class="mono-num">{fps}</em></span>
+    <span>capture fps</span>
     <div class="segmented">
       {#each FPS_OPTIONS as opt (opt)}
         <button
@@ -353,5 +361,14 @@
   .rotate button:active {
     border-color: var(--halo-accent);
     color: var(--halo-accent);
+  }
+  /* Icon-only variant: square, centered glyph (currentColor inherits the
+     button's text colour, so :active still tints it accent). */
+  .rotate button.icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    padding: 0.5rem;
   }
 </style>

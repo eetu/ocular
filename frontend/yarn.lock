@@ -86,6 +86,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@lucide/svelte@npm:^1.17.0":
+  version: 1.17.0
+  resolution: "@lucide/svelte@npm:1.17.0"
+  peerDependencies:
+    svelte: ^5
+  checksum: 10c0/0a34aa92310156ca5f70cdef45104e550894a54c0cc7b65b27bcd10053ee1b36afa968eab222b1fca6b44816d8decbe0bdb1d1169ca17c4e1255b1e877fd7e2d
+  languageName: node
+  linkType: hard
+
 "@napi-rs/wasm-runtime@npm:^1.1.4":
   version: 1.1.4
   resolution: "@napi-rs/wasm-runtime@npm:1.1.4"
@@ -655,6 +664,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "ocular-frontend@workspace:."
   dependencies:
+    "@lucide/svelte": "npm:^1.17.0"
     "@sveltejs/vite-plugin-svelte": "npm:^7.1.2"
     "@tsconfig/svelte": "npm:^5.0.4"
     prettier: "npm:^3.8.3"

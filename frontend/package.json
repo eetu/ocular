@@ -10,7 +10,7 @@
     "format": "prettier --check src",
     "format:fix": "prettier --write src",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "validate": "yarn typecheck && yarn format",
+    "validate": "yarn typecheck && yarn lint && yarn format",
     "preview": "vite preview"
   },
   "devDependencies": {
@@ -23,5 +23,8 @@
     "typescript": "^6.0.3",
     "vite": "^8.0.14"
   },
-  "packageManager": "yarn@4.12.0"
+  "packageManager": "yarn@4.12.0",
+  "dependencies": {
+    "@lucide/svelte": "^1.17.0"
+  }
 }
