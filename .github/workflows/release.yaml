@@ -1,0 +1,74 @@
+name: Release
+
+# Publishes a self-contained tarball (backend src + built SPA) as a GitHub
+# release asset, so the raspi deploy pulls a versioned artifact instead of
+# building from a working tree. Two channels:
+#   * push to main  -> a rolling `edge` prerelease, asset replaced each push
+#   * push tag v*    -> a pinned `vX.Y.Z` release
+# The tar stays native (no container): the Pi runs it under systemd with
+# picamera2 from apt — camera passthrough is why we don't ship the OCI image.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: write # create releases + upload assets
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.node-version
+
+      - name: Build SPA
+        working-directory: frontend
+        run: |
+          node .yarn/releases/yarn-*.cjs install --immutable
+          node .yarn/releases/yarn-*.cjs build
+
+      - name: Resolve channel
+        id: ch
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "rolling=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=edge" >> "$GITHUB_OUTPUT"
+            echo "rolling=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Assemble bundle
+        run: |
+          NAME="${{ steps.ch.outputs.name }}"
+          mkdir -p bundle/src bundle/dist
+          cp -r backend/src/. bundle/src/
+          cp -r frontend/dist/. bundle/dist/
+          printf 'version=%s\ncommit=%s\n' "$NAME" "$GITHUB_SHA" > bundle/VERSION
+          tar -czf "ocular-$NAME.tar.gz" -C bundle .
+          sha256sum "ocular-$NAME.tar.gz" | cut -d' ' -f1 > "ocular-$NAME.tar.gz.sha256"
+
+      - name: Publish pinned release
+        if: steps.ch.outputs.rolling == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NAME="${{ steps.ch.outputs.name }}"
+          gh release create "$NAME" --title "$NAME" --notes "ocular $NAME" \
+            "ocular-$NAME.tar.gz" "ocular-$NAME.tar.gz.sha256"
+
+      - name: Publish rolling edge
+        if: steps.ch.outputs.rolling == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Recreate so the `edge` tag follows main and the asset is fresh.
+          gh release delete edge --cleanup-tag --yes || true
+          gh release create edge --prerelease --target "$GITHUB_SHA" \
+            --title "edge (main)" --notes "Rolling build from main @ $GITHUB_SHA" \
+            ocular-edge.tar.gz ocular-edge.tar.gz.sha256
