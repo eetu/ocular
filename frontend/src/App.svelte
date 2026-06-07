@@ -102,46 +102,39 @@
 <header>
   <Wordmark />
   {#if live?.synthetic}<span class="badge">synthetic</span>{/if}
-  {#if live}<span class="badge viewers" title="connected stream viewers"
-      >{live.viewers} watching</span
-    >{/if}
-  {#if live}<span
-      class="badge viewers"
-      title="live capture rate (drops when the wheel is still)"
-      >{live.capture_fps} fps</span
-    >{/if}
   {#if live?.blind}<span
       class="badge blind"
       title="too dark to see the marker — counting paused until there's light"
       >camera dark — paused</span
     >{/if}
-  <div class="views">
-    <button
-      type="button"
-      class:active={view === "live"}
-      onclick={() => (view = "live")}>live</button
-    >
-    <button
-      type="button"
-      class:active={view === "history"}
-      onclick={() => (view = "history")}>history</button
-    >
-  </div>
 </header>
 
 <!-- Fixed toast: overlays, never reflows the content beneath it. -->
 {#if error}<div class="error halo-card" role="alert">{error}</div>{/if}
 
 <main>
-  {#if view === "history"}
-    <History />
-  {:else if config}
-    <div class="preview-bar">
-      <span>live preview</span>
+  <div class="topbar">
+    <div class="views">
+      <button
+        type="button"
+        class:active={view === "live"}
+        onclick={() => (view = "live")}>live</button
+      >
+      <button
+        type="button"
+        class:active={view === "history"}
+        onclick={() => (view = "history")}>history</button
+      >
+    </div>
+    {#if view === "live" && config}
       <button type="button" class="preview-toggle" onclick={togglePreview}>
         {showPreview ? "stop" : "show"}
       </button>
-    </div>
+    {/if}
+  </div>
+  {#if view === "history"}
+    <History />
+  {:else if config}
     {#if showPreview}
       <LiveView
         roi={config.detectors.revolution.roi}
@@ -203,8 +196,13 @@
     color: var(--halo-error);
     border-color: var(--halo-error);
   }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
   .views {
-    margin-left: auto;
     display: flex;
     gap: 0.3rem;
   }
@@ -249,16 +247,6 @@
     color: var(--halo-text-muted);
     padding: 3rem 0;
     font-family: var(--halo-font-heading);
-  }
-  .preview-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-family: var(--halo-font-heading);
-    font-size: 0.85rem;
-    color: var(--halo-text-main);
-    text-transform: lowercase;
-    margin-bottom: -0.4rem;
   }
   .preview-toggle {
     font-family: var(--halo-font-heading);
