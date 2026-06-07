@@ -30,7 +30,9 @@ Dockerfile container-ready (native systemd is the v1 deploy; see below)
   revolution tagged with its `source` ('camera'; 'hall' when the GPIO sensor
   lands) and instantaneous rpm. Replaces the old `state.json` total (migrated on
   first run). Counts, avg speed, activity sessions and distance all derive from
-  it; the displayed counter is rebaseable (reset preserves history).
+  it; the displayed counter is rebaseable (reset preserves history). Its `meta`
+  table also holds the runtime config overrides (see Config) — state that must
+  outlive a redeploy lives here, not in the deploy-rendered config file.
 - **Web** (`backend/src/ocular/web.py`) — `GET /stream.mjpg[?mask=1]`,
   `GET /api/state`, `GET /api/config`, `POST /api/detectors/revolution/config`
   (live reconfigure), `GET /api/stats`, `GET /api/history?hours&bucket`,
@@ -48,15 +50,26 @@ cd frontend && yarn && yarn dev
 ```
 
 Tune the ROI/threshold live from the UI while watching the stream — changes
-persist to the config file.
+persist to the store and survive a redeploy.
 
 ## Config
 
-Env (deploy invariants): `OCULAR_BIND`, `OCULAR_STATIC_DIR`, `OCULAR_CONFIG`,
-`OCULAR_STATE_DIR`, `OCULAR_DB` (defaults to `<state_dir>/ocular.db`).
-Live-tunable params (camera `rotation`, detector ROI /
-threshold / fps) live in the JSON config file, rewritten by the UI. Set
-`rotation` to `180` for an upside-down camera; a correctly mounted case needs `0`.
+Three layers, deep-merged (later wins):
+
+1. **Code defaults** — the dataclasses in `config.py`.
+2. **Deploy base** — a JSON file (`OCULAR_CONFIG`, `/etc/ocular/config.json`)
+   rendered by the raspi deploy from its `OCULAR` dict. Deploy-owned and
+   re-rendered every deploy; the app only reads it. Absent in dev → code defaults.
+3. **Runtime overrides** — only the keys the UI changed, stored as a JSON delta
+   in the SQLite store (`meta.config_overrides`, under `OCULAR_STATE_DIR`).
+   App-owned; the deploy never touches the state dir, so a UI tweak (ROI,
+   threshold, ...) survives a redeploy and wins over the base.
+
+Env (deploy invariants, not UI-tunable): `OCULAR_BIND`, `OCULAR_STATIC_DIR`,
+`OCULAR_CONFIG`, `OCULAR_STATE_DIR`, `OCULAR_DB` (defaults to
+`<state_dir>/ocular.db`). Set camera `rotation` to `180` for an upside-down
+camera (in the deploy base, or live from the UI); a correctly mounted case
+needs `0`.
 
 ## Deploy
 

@@ -83,8 +83,13 @@ class RevolutionDetector(Detector):
         # frame. Order-agnostic, so picamera2's BGR-vs-RGB quirk doesn't matter.
         gray_roi = frame[y0:y1, x0:x1].mean(axis=2).astype(np.uint8)
         # Auto-threshold (Otsu) tracks the marker/rim split as light changes;
-        # else use the fixed cutoff.
-        thr = _otsu(gray_roi) if self._cfg.auto_threshold else self._cfg.threshold
+        # else use the fixed cutoff. Cap the auto value at auto_threshold_max so a
+        # busy scene (spokes/grate) can't push the cut so high that rim counts as
+        # marker — auto can adapt down for dusk, just not run away upward.
+        if self._cfg.auto_threshold:
+            thr = min(_otsu(gray_roi), self._cfg.auto_threshold_max)
+        else:
+            thr = self._cfg.threshold
         self._last_threshold = thr
         # Fraction of ROI pixels matching the marker (dark by default, light if
         # marker_is_dark is false). A per-pixel test, not a whole-ROI mean, so a

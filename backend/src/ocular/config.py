@@ -1,22 +1,29 @@
 """Runtime configuration.
 
-Config comes from two layers, in order of precedence:
-  1. Environment (deploy-time invariants: bind address, paths, log level).
-  2. A JSON file (live-tunable detector params: ROI, threshold, fps, rotation).
+Effective config is three layers deep-merged, in order of precedence:
+  1. Code defaults — the dataclass defaults below.
+  2. Deploy base — a JSON file (/etc/ocular/config.json) rendered by the raspi
+     deploy (tasks/ocular.py) from the OCULAR dict. Owned by the deploy and
+     re-rendered on every deploy; the app only ever READS it. In dev it's
+     absent, so the app runs on the code defaults.
+  3. Runtime overrides — only the keys the UI has changed, stored as a JSON delta
+     in the SQLite store (meta.config_overrides, in OCULAR_STATE_DIR). Owned by
+     the app, written when a detector/camera is reconfigured. The deploy never
+     touches the state dir, so these survive a redeploy — and because they're a
+     delta, a new default flows through and a removed key is just ignored.
 
-The JSON file is the source of truth for everything the UI can tweak. The web
-layer rewrites it (atomically) when a detector is reconfigured, so changes
-survive a restart. On the Pi it is rendered from the OCULAR dict by the raspi
-deploy (tasks/ocular.py) and lives at /etc/ocular/config.json; in dev it falls
-back to baked-in defaults so the app runs with no config present.
+So a UI tweak persists in the DB (layer 3) and wins over the deploy base; a
+redeploy resets the base (layer 2) but the override is re-applied on load. The
+web layer no longer rewrites the JSON file — that file is purely the base.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
+from typing import Any
 
 # --- Camera + capture ---------------------------------------------------------
 
@@ -61,6 +68,14 @@ class RevolutionConfig:
     # the marker/rim split tracks changing light (dusk) without re-tuning. The
     # whole-scene blind-guard takes over once it's genuinely too dark to see.
     auto_threshold: bool = True
+    # Upper bound on the auto (Otsu) threshold. Otsu picks the *optimal* split,
+    # but a busy scene (wheel spokes, a grate) can push that high enough that
+    # mid-grey rim counts as "marker" and every spoke fakes a revolution. Capping
+    # it keeps auto from ever rising past the known-good dark-tape cutoff — auto
+    # can still adapt DOWN for dusk, it just can't run away upward. Default mirrors
+    # the manual `threshold`; raise it if a genuinely light marker needs a higher
+    # cut. Only applies when auto_threshold is on.
+    auto_threshold_max: int = 60
     # Fraction (0-1) of ROI pixels that must match the marker for it to count as
     # present. Decouples detection from ROI size: a short tape band crossing a
     # tall ROI still spikes coverage, where a whole-ROI *mean* would barely move.
@@ -108,10 +123,10 @@ class Config:
 
     @classmethod
     def from_dict(cls, data: dict) -> Config:
-        cam = CameraConfig(**(data.get("camera") or {}))
         det_data = data.get("detectors") or {}
-        rev = RevolutionConfig(**(det_data.get("revolution") or {}))
-        hall = HallConfig(**(det_data.get("hall") or {}))
+        cam = CameraConfig(**_known(CameraConfig, data.get("camera")))
+        rev = RevolutionConfig(**_known(RevolutionConfig, det_data.get("revolution")))
+        hall = HallConfig(**_known(HallConfig, det_data.get("hall")))
         return cls(camera=cam, detectors=DetectorsConfig(revolution=rev, hall=hall))
 
     def to_dict(self) -> dict:
@@ -146,17 +161,40 @@ class Settings:
         )
 
 
+def _known(cls: type, data: dict | None) -> dict:
+    """Keep only the keys that are still fields of `cls`. Lets a persisted
+    override (or an old base file) carry a since-removed/renamed key without
+    blowing up dataclass construction — the stray key is dropped, not fatal."""
+    allowed = {f.name for f in fields(cls)}
+    return {k: v for k, v in (data or {}).items() if k in allowed}
+
+
+def deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge `override` onto `base` (override wins). Nested dicts are
+    merged key-by-key; everything else (scalars, lists like roi) is replaced
+    wholesale. Neither input is mutated."""
+    out = dict(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def merge_overrides(base: Config, overrides: dict[str, Any]) -> Config:
+    """Layer runtime overrides (a config-shaped delta) onto the base config."""
+    if not overrides:
+        return base
+    return Config.from_dict(deep_merge(base.to_dict(), overrides))
+
+
 def load_config(path: Path) -> Config:
-    """Read the JSON config file, falling back to defaults if it's absent."""
+    """Read the deploy base config file, falling back to defaults if absent.
+
+    This is layer 2 only — runtime overrides (layer 3) live in the store and are
+    merged on top by the pipeline. The app never writes this file."""
     try:
         return Config.from_dict(json.loads(path.read_text()))
     except (FileNotFoundError, json.JSONDecodeError):
         return Config()
-
-
-def save_config(path: Path, config: Config) -> None:
-    """Atomically persist config so a crash mid-write can't truncate it."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(config.to_dict(), indent=2))
-    tmp.replace(path)

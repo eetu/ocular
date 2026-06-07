@@ -20,7 +20,7 @@ import time
 import numpy as np
 
 from .camera import Capture
-from .config import Config, Settings, save_config
+from .config import Config, Settings, merge_overrides
 from .detectors import Detector
 from .detectors.revolution import RevolutionDetector
 from .store import RevolutionStore
@@ -38,26 +38,29 @@ _DARK_FLOOR = 22.0
 
 class Pipeline:
     def __init__(self, config: Config, settings: Settings) -> None:
-        self.config = config
         self.settings = settings
-        self.capture = Capture(config.camera)
-        self.detectors: dict[str, Detector] = {}
-        self._lock = threading.Lock()
-        self._running = False
-        self._thread: threading.Thread | None = None
         # Time-series of revolutions (replaces the old state.json total). Import
         # any pre-SQLite total once so the displayed count survives the upgrade.
         self.store = RevolutionStore(settings.db_path)
         self.store.migrate_from_json(settings.state_dir / "state.json")
+        # Layer the deploy-immune runtime overrides over the deploy base config,
+        # so a UI tweak (ROI, threshold, ...) survives a redeploy that re-renders
+        # the base file. The store is the source of truth for everything tunable.
+        self.config = merge_overrides(config, self.store.get_config_overrides())
+        self.capture = Capture(self.config.camera)
+        self.detectors: dict[str, Detector] = {}
+        self._lock = threading.Lock()
+        self._running = False
+        self._thread: threading.Thread | None = None
         # adaptive idle state
-        self._effective_fps = max(1, config.camera.fps)
+        self._effective_fps = max(1, self.config.camera.fps)
         self._last_motion = 0.0
         self._prev_small: np.ndarray | None = None
         self._scene_brightness = 255.0
         self._blind = False
 
         rev = RevolutionDetector()
-        rev.configure(config.detectors.revolution)
+        rev.configure(self.config.detectors.revolution)
         self.detectors[rev.name] = rev
 
     # --- lifecycle ---
@@ -161,9 +164,11 @@ class Pipeline:
         on the next loop tick (and via a live control change on the real camera)."""
         with self._lock:
             cam = self.config.camera
+            applied: dict = {}
             if changes.get("rotation") is not None:
                 cam.rotation = int(changes["rotation"]) % 360
                 self.capture.set_rotation(cam.rotation)
+                applied["rotation"] = cam.rotation
             if changes.get("fps") is not None:
                 cam.fps = max(1, int(changes["fps"]))
                 # Treat a manual change as activity so the new rate is felt now,
@@ -171,9 +176,12 @@ class Pipeline:
                 self._last_motion = time.monotonic()
                 self._effective_fps = cam.fps
                 self.capture.set_fps(cam.fps)
+                applied["fps"] = cam.fps
             if changes.get("idle_fps") is not None:
                 cam.idle_fps = max(0, int(changes["idle_fps"]))
-            save_config(self.settings.config_path, self.config)
+                applied["idle_fps"] = cam.idle_fps
+            if applied:
+                self.store.merge_config_overrides({"camera": applied})
             return {"rotation": cam.rotation, "fps": cam.fps, "idle_fps": cam.idle_fps}
 
     def reset_revolution(self) -> dict:
@@ -189,12 +197,16 @@ class Pipeline:
         """Apply UI-driven changes to the revolution detector and persist them."""
         with self._lock:
             cfg = self.config.detectors.revolution
-            for key in ("enabled", "roi", "threshold", "auto_threshold", "min_coverage",
-                        "debounce_frames", "wheel_circumference_m", "marker_is_dark"):
+            applied: dict = {}
+            for key in ("enabled", "roi", "threshold", "auto_threshold", "auto_threshold_max",
+                        "min_coverage", "debounce_frames", "wheel_circumference_m",
+                        "marker_is_dark"):
                 if key in changes and changes[key] is not None:
                     setattr(cfg, key, changes[key])
+                    applied[key] = changes[key]
             self.detectors["revolution"].configure(cfg)
-            save_config(self.settings.config_path, self.config)
+            if applied:
+                self.store.merge_config_overrides({"detectors": {"revolution": applied}})
             return self.detectors["revolution"].state()
 
     # --- state persistence ---

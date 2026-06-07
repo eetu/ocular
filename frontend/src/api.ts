@@ -24,6 +24,7 @@ export type RevolutionConfig = {
   roi: [number, number, number, number];
   threshold: number;
   auto_threshold: boolean;
+  auto_threshold_max: number;
   min_coverage: number;
   debounce_frames: number;
   wheel_circumference_m: number;

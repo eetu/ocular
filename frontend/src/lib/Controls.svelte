@@ -96,6 +96,27 @@
     counting pauses when it's too dark to see the marker.
   </div>
 
+  {#if config.auto_threshold}
+    <label class="row">
+      <span>auto max <em class="mono-num">{config.auto_threshold_max}</em></span
+      >
+      <input
+        type="range"
+        min="0"
+        max="255"
+        value={config.auto_threshold_max}
+        oninput={(e) =>
+          onchange({ auto_threshold_max: +e.currentTarget.value })}
+      />
+    </label>
+    <div class="hint">
+      Ceiling on the auto cutoff. A busy scene (spokes, a grate) can push auto
+      so high the rim counts as marker and every spoke fakes a turn — cap it
+      (~60 for dark tape) so auto can adapt down for dusk but never run away
+      upward.
+    </div>
+  {/if}
+
   <label class="row">
     <span
       >threshold {config.auto_threshold ? "(auto)" : ""}

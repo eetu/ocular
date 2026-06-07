@@ -27,6 +27,8 @@ import sqlite3
 import threading
 from pathlib import Path
 
+from .config import deep_merge
+
 
 class RevolutionStore:
     def __init__(self, path: Path) -> None:
@@ -85,6 +87,32 @@ class RevolutionStore:
             self._meta_set("counter_offset", "0")
             self._meta_set("counter_reset_ts", repr(now))
             self._db.commit()
+
+    # --- config overrides (the deploy-immune layer-3 delta) ---
+
+    def get_config_overrides(self) -> dict:
+        """The runtime config delta the UI has saved — only the keys it changed.
+        Lives here (state dir) rather than the deploy-rendered config file so it
+        survives a redeploy. Empty dict if unset or unreadable."""
+        with self._lock:
+            raw = self._meta_get("config_overrides")
+        try:
+            return json.loads(raw) if raw else {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    def merge_config_overrides(self, delta: dict) -> dict:
+        """Deep-merge a config-shaped delta into the stored overrides and persist
+        it atomically. Returns the merged overrides."""
+        with self._lock:
+            try:
+                cur = json.loads(self._meta_get("config_overrides") or "{}")
+            except json.JSONDecodeError:
+                cur = {}
+            merged = deep_merge(cur, delta)
+            self._meta_set("config_overrides", json.dumps(merged))
+            self._db.commit()
+            return merged
 
     # --- reads ---
 
