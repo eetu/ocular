@@ -19,3 +19,7 @@ frontend/dist/
 # Runtime / local
 data/
 *.log
+# SQLite store (revolution history) + WAL sidecars
+*.db
+*.db-wal
+*.db-shm
