@@ -5,6 +5,9 @@ Endpoints:
   GET  /api/me                          trusted user from the oauth2-proxy edge
   GET  /api/state                       detector states
   GET  /api/config                      current config
+  GET  /api/stats                       lifetime/today rollups
+  GET  /api/history?hours&bucket        revolutions bucketed over time
+  GET  /api/sessions?hours&gap          activity sessions (wheel-in-use runs)
   POST /api/detectors/revolution/config live-reconfigure the counter
   GET  /stream.mjpg[?mask=1]            live MJPEG (overlay, or threshold mask)
   GET  /*                               the Svelte SPA (dist/) with fallback
@@ -18,6 +21,7 @@ supported tuning path, so a missing header just yields an anonymous identity.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import io
 import threading
 import time
@@ -53,6 +57,25 @@ _STREAM_IDLE_FPS = 2
 # accent #f78f08 (active) / muted grey (idle) — matches halo-design tokens.
 _ACTIVE_RGB = (247, 143, 8)
 _IDLE_RGB = (160, 160, 160)
+
+
+_BUCKETS = {"hour": 3600, "day": 86400}
+# Inter-event gap that splits one activity session from the next (a still wheel
+# logs nothing, so a gap this long means the cat stepped off).
+_SESSION_GAP_S = 30.0
+
+
+def _today_start_ts() -> float:
+    """Epoch of the most recent local midnight — the boundary for 'today'."""
+    midnight = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight.timestamp()
+
+
+def _with_distance(rows: list[dict], circ: float) -> list[dict]:
+    """Annotate each row with distance from its rev count (circ from config)."""
+    for r in rows:
+        r["distance_m"] = round(r["revs"] * circ, 1) if circ else None
+    return rows
 
 
 def _encode_jpeg(img: Image.Image, quality: int = _STREAM_QUALITY) -> bytes:
@@ -174,6 +197,34 @@ def create_app(pipeline: Pipeline, settings: Settings) -> FastAPI:
     @app.get("/api/config")
     def get_config() -> dict:
         return pipeline.config.to_dict()
+
+    @app.get("/api/stats")
+    async def stats() -> JSONResponse:
+        circ = pipeline.config.detectors.revolution.wheel_circumference_m
+        today_start = _today_start_ts()
+        s = await run_in_threadpool(pipeline.store.stats, today_start)
+        s["avg_active_rpm"] = s.pop("today_avg_rpm")
+        s["today_distance_m"] = round(s["today_revolutions"] * circ, 1) if circ else None
+        sess = await run_in_threadpool(
+            pipeline.store.sessions, today_start, time.time(), _SESSION_GAP_S
+        )
+        s["today_active_min"] = round(sum(x["duration_s"] for x in sess) / 60.0, 1)
+        return JSONResponse(s)
+
+    @app.get("/api/history")
+    async def history(hours: int = 24, bucket: str = "hour") -> JSONResponse:
+        bucket_s = _BUCKETS.get(bucket, 3600)
+        to = time.time()
+        rows = await run_in_threadpool(pipeline.store.history, to - hours * 3600, to, bucket_s)
+        circ = pipeline.config.detectors.revolution.wheel_circumference_m
+        return JSONResponse({"buckets": _with_distance(rows, circ), "bucket_s": bucket_s})
+
+    @app.get("/api/sessions")
+    async def sessions(hours: int = 24, gap: float = _SESSION_GAP_S) -> JSONResponse:
+        to = time.time()
+        rows = await run_in_threadpool(pipeline.store.sessions, to - hours * 3600, to, gap)
+        circ = pipeline.config.detectors.revolution.wheel_circumference_m
+        return JSONResponse({"sessions": _with_distance(rows, circ)})
 
     @app.post("/api/detectors/revolution/config")
     async def set_revolution(request: Request) -> JSONResponse:

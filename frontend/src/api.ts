@@ -35,6 +35,37 @@ export type ConfigResponse = {
   detectors: { revolution: RevolutionConfig };
 };
 
+export type HistoryBucket = {
+  t: number; // bucket start, epoch seconds
+  revs: number;
+  avg_rpm: number;
+  peak_rpm: number;
+  distance_m: number | null;
+};
+
+export type HistoryResponse = { buckets: HistoryBucket[]; bucket_s: number };
+
+export type Session = {
+  start: number;
+  end: number;
+  revs: number;
+  duration_s: number;
+  avg_rpm: number;
+  peak_rpm: number;
+  distance_m: number | null;
+};
+
+export type Stats = {
+  lifetime_revolutions: number;
+  displayed: number;
+  today_revolutions: number;
+  avg_active_rpm: number;
+  today_distance_m: number | null;
+  today_active_min: number;
+  first_ts: number | null;
+  last_ts: number | null;
+};
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
@@ -59,4 +90,13 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(changes),
     }).then((r) => json<{ rotation: number; fps: number }>(r)),
+  stats: () => fetch("/api/stats").then((r) => json<Stats>(r)),
+  history: (hours: number, bucket: "hour" | "day") =>
+    fetch(`/api/history?hours=${hours}&bucket=${bucket}`).then((r) =>
+      json<HistoryResponse>(r),
+    ),
+  sessions: (hours: number, gap = 30) =>
+    fetch(`/api/sessions?hours=${hours}&gap=${gap}`).then((r) =>
+      json<{ sessions: Session[] }>(r),
+    ),
 };

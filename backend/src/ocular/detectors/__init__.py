@@ -33,6 +33,12 @@ class Detector:
         """Return the current JSON-able state for the API."""
         return {}
 
+    def drain_events(self) -> list[tuple[float, float | None]]:
+        """Return revolutions detected since the last drain as (wall_clock_ts,
+        rpm) and clear the buffer. The pipeline persists these to the store each
+        tick. Default empty — only counting detectors emit events."""
+        return []
+
     def overlay(self) -> dict | None:
         """Optional drawing hint for the stream overlay, e.g.
         {"roi": [x, y, w, h], "active": bool}. None = nothing to draw."""

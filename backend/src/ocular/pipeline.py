@@ -2,8 +2,10 @@
 
 A background thread reads the latest frame and feeds it to every enabled
 detector each tick (detectors grayscale only their own ROI). Detector results
-are read by the web layer (/api/state) and drawn onto the MJPEG overlay. The
-revolution count is persisted periodically so a restart doesn't lose the total.
+are read by the web layer (/api/state) and drawn onto the MJPEG overlay. Each
+tick the loop drains any new revolutions from the detectors into the SQLite
+store (one row per revolution) — that time-series is the persistence, so a
+restart resumes the count and the history endpoints have data to aggregate.
 
 Adaptive idle: the loop watches a cheap whole-scene motion signal and drops the
 capture rate to camera.idle_fps after a few still seconds, ramping back to
@@ -12,7 +14,6 @@ camera.fps the instant something moves — so a parked wheel barely loads the Pi
 
 from __future__ import annotations
 
-import json
 import threading
 import time
 
@@ -22,6 +23,7 @@ from .camera import Capture
 from .config import Config, Settings, save_config
 from .detectors import Detector
 from .detectors.revolution import RevolutionDetector
+from .store import RevolutionStore
 
 # Whole-scene motion gate for adaptive idling. Subsample the frame coarsely and
 # compare frame-to-frame; mean abs luminance delta over _MOTION_EPS = "moving".
@@ -43,7 +45,10 @@ class Pipeline:
         self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
-        self._state_file = settings.state_dir / "state.json"
+        # Time-series of revolutions (replaces the old state.json total). Import
+        # any pre-SQLite total once so the displayed count survives the upgrade.
+        self.store = RevolutionStore(settings.db_path)
+        self.store.migrate_from_json(settings.state_dir / "state.json")
         # adaptive idle state
         self._effective_fps = max(1, config.camera.fps)
         self._last_motion = 0.0
@@ -69,11 +74,10 @@ class Pipeline:
         self._running = False
         if self._thread is not None:
             self._thread.join(timeout=2.0)
-        self._save_state()
         self.capture.stop()
+        self.store.close()
 
     def _loop(self) -> None:
-        last_save = 0.0
         while self._running:
             frame = self.capture.latest()
             if frame is None:
@@ -87,9 +91,11 @@ class Pipeline:
                 with self._lock:
                     for det in self.detectors.values():
                         det.process(frame)
-            if now - last_save > 10.0:
-                self._save_state()
-                last_save = now
+            # Persist any revolutions counted this tick. Drained outside the lock
+            # (same thread as process, so the buffer is ours) to keep the DB
+            # write off the read-contended path.
+            for name, det in self.detectors.items():
+                self.store.record_many(name, det.drain_events())
             time.sleep(1.0 / self._effective_fps)
 
     def _adapt_fps(self, frame: np.ndarray, now: float) -> None:
@@ -171,12 +177,12 @@ class Pipeline:
             return {"rotation": cam.rotation, "fps": cam.fps, "idle_fps": cam.idle_fps}
 
     def reset_revolution(self) -> dict:
-        """Zero the revolution count and persist immediately."""
+        """Rebaseline the displayed count to zero — stored history is preserved."""
         with self._lock:
             det = self.detectors["revolution"]
             if isinstance(det, RevolutionDetector):
                 det.reset()
-            self._save_state()
+            self.store.reset_counter(time.time())
             return det.state()
 
     def reconfigure_revolution(self, changes: dict) -> dict:
@@ -194,20 +200,7 @@ class Pipeline:
     # --- state persistence ---
 
     def _load_state(self) -> None:
-        try:
-            data = json.loads(self._state_file.read_text())
-        except (FileNotFoundError, json.JSONDecodeError):
-            return
+        """Seed the live displayed count from the store on startup."""
         rev = self.detectors.get("revolution")
-        if isinstance(rev, RevolutionDetector) and "revolutions" in data:
-            rev.load_count(int(data["revolutions"]))
-
-    def _save_state(self) -> None:
-        try:
-            self.settings.state_dir.mkdir(parents=True, exist_ok=True)
-            rev = self.detectors["revolution"].state()
-            tmp = self._state_file.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps({"revolutions": rev["revolutions"]}))
-            tmp.replace(self._state_file)
-        except OSError as e:
-            print(f"ocular: could not persist state: {e}")
+        if isinstance(rev, RevolutionDetector):
+            rev.load_count(self.store.displayed_count())

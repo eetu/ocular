@@ -63,6 +63,8 @@ class RevolutionDetector(Detector):
         self._last_coverage = 0.0
         self._last_threshold = 0
         self._active = False  # marker currently in the ROI (debounced)
+        # (wall_clock_ts, rpm) per revolution, drained by the pipeline into the store
+        self._events: list[tuple[float, float | None]] = []
 
     def configure(self, cfg: RevolutionConfig) -> None:
         self._cfg = cfg
@@ -114,6 +116,13 @@ class RevolutionDetector(Detector):
                         self._rpm = 60.0 / dt
                 self._last_cross = now
                 self._count += 1
+                # Stamp the event with wall-clock time (monotonic is only good
+                # for the dt above); rpm is None on the first edge (no interval).
+                self._events.append((time.time(), self._rpm if self._rpm else None))
+
+    def drain_events(self) -> list[tuple[float, float | None]]:
+        events, self._events = self._events, []
+        return events
 
     def load_count(self, count: int) -> None:
         """Seed the running total from persisted state on startup."""

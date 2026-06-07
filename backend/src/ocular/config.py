@@ -77,8 +77,23 @@ class RevolutionConfig:
 
 
 @dataclass
+class HallConfig:
+    """Hall-effect revolution sensor — magnets on the rim past a GPIO sensor.
+    Counts in the dark, where the camera detector goes blind. The GPIO producer
+    (hall.py) lands with the hardware; this config is wired now so the schema and
+    UI are ready and the sensor is purely additive."""
+
+    enabled: bool = False
+    # BCM pin the sensor's output is wired to.
+    gpio_pin: int = 17
+    # Magnets per full revolution — divide the pulse count by this to get turns.
+    pulses_per_rev: int = 1
+
+
+@dataclass
 class DetectorsConfig:
     revolution: RevolutionConfig = field(default_factory=RevolutionConfig)
+    hall: HallConfig = field(default_factory=HallConfig)
 
 
 # --- Top-level ----------------------------------------------------------------
@@ -96,7 +111,8 @@ class Config:
         cam = CameraConfig(**(data.get("camera") or {}))
         det_data = data.get("detectors") or {}
         rev = RevolutionConfig(**(det_data.get("revolution") or {}))
-        return cls(camera=cam, detectors=DetectorsConfig(revolution=rev))
+        hall = HallConfig(**(det_data.get("hall") or {}))
+        return cls(camera=cam, detectors=DetectorsConfig(revolution=rev, hall=hall))
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -112,17 +128,21 @@ class Settings:
     static_dir: Path
     config_path: Path
     state_dir: Path
+    db_path: Path
 
     @classmethod
     def from_env(cls) -> Settings:
         bind = os.environ.get("OCULAR_BIND", "0.0.0.0:8099")
         host, _, port = bind.partition(":")
+        state_dir = Path(os.environ.get("OCULAR_STATE_DIR", "/var/lib/ocular"))
+        db_env = os.environ.get("OCULAR_DB")
         return cls(
             bind_host=host or "0.0.0.0",
             bind_port=int(port or "8099"),
             static_dir=Path(os.environ.get("OCULAR_STATIC_DIR", "./dist")),
             config_path=Path(os.environ.get("OCULAR_CONFIG", "/etc/ocular/config.json")),
-            state_dir=Path(os.environ.get("OCULAR_STATE_DIR", "/var/lib/ocular")),
+            state_dir=state_dir,
+            db_path=Path(db_env) if db_env else state_dir / "ocular.db",
         )
 
 

@@ -26,10 +26,17 @@ Dockerfile container-ready (native systemd is the v1 deploy; see below)
   frame and emits a small state dict. `revolution` is an ROI line-crossing
   counter (threshold + hysteresis debounce). Add one by subclassing `Detector`
   and registering it.
+- **Store** (`backend/src/ocular/store.py`) — a SQLite time-series, one row per
+  revolution tagged with its `source` ('camera'; 'hall' when the GPIO sensor
+  lands) and instantaneous rpm. Replaces the old `state.json` total (migrated on
+  first run). Counts, avg speed, activity sessions and distance all derive from
+  it; the displayed counter is rebaseable (reset preserves history).
 - **Web** (`backend/src/ocular/web.py`) — `GET /stream.mjpg[?mask=1]`,
   `GET /api/state`, `GET /api/config`, `POST /api/detectors/revolution/config`
-  (live reconfigure), `GET /status` (unauth liveness). Serves the SPA from
-  `dist/`. Trusts `X-Auth-Request-*` from the oauth2-proxy edge.
+  (live reconfigure), `GET /api/stats`, `GET /api/history?hours&bucket`,
+  `GET /api/sessions?hours&gap`, `GET /status` (unauth liveness). Serves the SPA
+  from `dist/` (a `live | history` view toggle). Trusts `X-Auth-Request-*` from
+  the oauth2-proxy edge.
 
 ## Develop
 
@@ -46,7 +53,8 @@ persist to the config file.
 ## Config
 
 Env (deploy invariants): `OCULAR_BIND`, `OCULAR_STATIC_DIR`, `OCULAR_CONFIG`,
-`OCULAR_STATE_DIR`. Live-tunable params (camera `rotation`, detector ROI /
+`OCULAR_STATE_DIR`, `OCULAR_DB` (defaults to `<state_dir>/ocular.db`).
+Live-tunable params (camera `rotation`, detector ROI /
 threshold / fps) live in the JSON config file, rewritten by the UI. Set
 `rotation` to `180` for an upside-down camera; a correctly mounted case needs `0`.
 

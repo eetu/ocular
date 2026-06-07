@@ -7,6 +7,7 @@
   } from "./api";
   import Controls from "./lib/Controls.svelte";
   import Counter from "./lib/Counter.svelte";
+  import History from "./lib/History.svelte";
   import LiveView from "./lib/LiveView.svelte";
   import Wordmark from "./lib/Wordmark.svelte";
 
@@ -14,6 +15,7 @@
   let live = $state<StateResponse | null>(null);
   let mask = $state(false);
   let error = $state<string | null>(null);
+  let view = $state<"live" | "history">("live");
   // Preview is opt-in: the live MJPEG stream is the expensive part, and most of
   // the time you only want the count (cheap /api/state poll). Off → no stream
   // connection → the backend encoder stays idle.
@@ -113,13 +115,27 @@
       title="too dark to see the marker — counting paused until there's light"
       >camera dark — paused</span
     >{/if}
+  <div class="views">
+    <button
+      type="button"
+      class:active={view === "live"}
+      onclick={() => (view = "live")}>live</button
+    >
+    <button
+      type="button"
+      class:active={view === "history"}
+      onclick={() => (view = "history")}>history</button
+    >
+  </div>
 </header>
 
 <!-- Fixed toast: overlays, never reflows the content beneath it. -->
 {#if error}<div class="error halo-card" role="alert">{error}</div>{/if}
 
 <main>
-  {#if config}
+  {#if view === "history"}
+    <History />
+  {:else if config}
     <div class="preview-bar">
       <span>live preview</span>
       <button type="button" class="preview-toggle" onclick={togglePreview}>
@@ -186,6 +202,27 @@
   .badge.blind {
     color: var(--halo-error);
     border-color: var(--halo-error);
+  }
+  .views {
+    margin-left: auto;
+    display: flex;
+    gap: 0.3rem;
+  }
+  .views button {
+    font-family: var(--halo-font-heading);
+    text-transform: lowercase;
+    font-size: 0.8rem;
+    color: var(--halo-text-muted);
+    background: var(--halo-bg-light);
+    border: 1px solid var(--halo-border);
+    border-radius: var(--halo-radius-pill);
+    padding: 0.35rem 0.7rem;
+    min-height: 36px;
+    cursor: pointer;
+  }
+  .views button.active {
+    border-color: var(--halo-accent);
+    color: var(--halo-accent);
   }
   main {
     max-width: 560px;
