@@ -7,12 +7,12 @@
        "warm centre". The iris is clipped to the eye so it tucks under the upper
        lid, with a gap left above the lower lid. -->
   <defs>
-    <clipPath id="eye"><path d="M4 32 Q32 11 60 32 Q32 53 4 32 Z"/></clipPath>
+    <clipPath id="eye"><path d="M4 32 Q32 5 60 32 Q32 53 4 33 Z"/></clipPath>
   </defs>
   <rect width="64" height="64" fill="#ffffff"/>
   <g clip-path="url(#eye)">
-    <circle cx="32" cy="29" r="12" stroke="#525252" stroke-width="2.5"/>
-    <circle cx="32" cy="30" r="5" fill="#f78f08" stroke="none"/>
+    <circle cx="31" cy="28" r="13" stroke="#525252" stroke-width="2.5"/>
+    <circle cx="31" cy="29" r="5" fill="#f78f08" stroke="none"/>
   </g>
-  <path d="M4 32 Q32 11 60 32 Q32 53 4 32 Z" stroke="#525252" stroke-width="3"/>
+  <path d="M4 32 Q32 5 60 32 Q32 53 4 33 Z" stroke="#525252" stroke-width="3"/>
 </svg>
