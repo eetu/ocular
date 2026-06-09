@@ -1,8 +1,8 @@
 <!-- Big revolution counter that eases to new values (halo motion), with rpm,
      distance, and a live marker-present dot. -->
 <script lang="ts">
-  import { Tween } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
+  import { Tween } from "svelte/motion";
 
   import type { RevolutionState } from "../api";
 
