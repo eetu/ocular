@@ -5,6 +5,7 @@ updates:
     schedule:
       interval: weekly
     cooldown:
+      default-days: 7
       semver-major-days: 14
       semver-minor-days: 7
       semver-patch-days: 5
@@ -17,16 +18,23 @@ updates:
     schedule:
       interval: weekly
     cooldown:
+      default-days: 7
       semver-major-days: 14
       semver-minor-days: 7
       semver-patch-days: 5
 
+  # docker + github-actions only honour `default-days` — the semver-* keys
+  # silently break parsing for these ecosystems, so they're omitted.
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
