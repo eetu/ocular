@@ -29,6 +29,6 @@
   },
   "packageManager": "yarn@4.16.0",
   "dependencies": {
-    "@lucide/svelte": "^1.17.0"
+    "@lucide/svelte": "^1.18.0"
   }
 }
