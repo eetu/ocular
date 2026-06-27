@@ -31,7 +31,7 @@ dependencies = [
 ocular = "ocular.__main__:main"
 
 [dependency-groups]
-dev = ["ruff>=0.15.17"]
+dev = ["ruff>=0.15.18"]
 
 [tool.uv]
 package = true
