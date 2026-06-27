@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   # Plain uvicorn (not [standard]): a loopback, low-QPS appliance on a 1 GB Pi
   # doesn't need uvloop/httptools/websockets/watchfiles. Falls back to asyncio + h11.
-  "fastapi>=0.136.1",
+  "fastapi>=0.138.0",
   "uvicorn>=0.47.0",
   "numpy>=1.26",
   # Pillow does JPEG encode + ROI/overlay drawing — we skip OpenCV entirely
