@@ -12,7 +12,7 @@ dependencies = [
   # Pillow does JPEG encode + ROI/overlay drawing — we skip OpenCV entirely
   # (numpy handles the grayscale/threshold the detectors need), one fewer heavy
   # ARM dependency on the Pi.
-  "pillow>=10.0",
+  "pillow>=12.3.0",
 ]
 
 # picamera2 only resolves/builds on the Pi (libcamera + ARM wheels). It's an
