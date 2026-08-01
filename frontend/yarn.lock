@@ -343,12 +343,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lucide/svelte@npm:^1.23.0":
-  version: 1.23.0
-  resolution: "@lucide/svelte@npm:1.23.0"
+"@lucide/svelte@npm:^1.26.0":
+  version: 1.26.0
+  resolution: "@lucide/svelte@npm:1.26.0"
   peerDependencies:
     svelte: ^5
-  checksum: 10c0/0c2f36de6cfc83419afd4707707f33ffd4cec23f18567957b62bb5ef204ffe282f14d657b9e4cb2f3fdfc96ed418b63ad152c8c9a8cd2c8f44ab0d3312ae354f
+  checksum: 10c0/8c6cad9d4b67e492fa677e410be83526126e427e044514482497c5cacb999df405794a018e85205406eafefbe1baabd7c65b77d836a940f60a9a65a2e1c62735
   languageName: node
   linkType: hard
 
@@ -1864,7 +1864,7 @@ __metadata:
   resolution: "ocular-frontend@workspace:."
   dependencies:
     "@anarkisti/eslint-config": "npm:^1.1.0"
-    "@lucide/svelte": "npm:^1.23.0"
+    "@lucide/svelte": "npm:^1.26.0"
     "@sveltejs/vite-plugin-svelte": "npm:^7.2.0"
     "@tsconfig/svelte": "npm:^5.0.4"
     eslint: "npm:^10.8.0"
